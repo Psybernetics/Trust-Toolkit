@@ -13,11 +13,14 @@ class Node(object):
         if isinstance(id, long):
             id = binascii.unhexlify('%x' % id)
         self.id           = id or hashlib.sha1(time.asctime()).digest()
-        self.long_id      = long(self.id.encode("hex"), 16)
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0
+        self.colour       = False
+        self.epsilon      = 0.0001
+        self.long_id      = long(self.id.encode("hex"), 16)
         self.transactions = 0
+        self.malicious    = False
 
     @property
     def threeple(self):
@@ -28,7 +31,7 @@ class Node(object):
         return copy.deepcopy(self)
 
     def transact(self):
-        self.trust += 1
+        self.trust += self.epsilon
         self.transactions += 1
 
     def jsonify(self):
@@ -44,8 +47,22 @@ class Node(object):
         return False
 
     def __repr__(self):
-        return "<Node %s:%i %.2fT/%i>" %\
-            (self.ip, self.port, self.trust, self.transactions)
+        if self.colour:
+            return "<Node %s%s:%i%s %s%.4fT%s/%i>" %\
+                (colour.red if self.malicious else colour.green,
+                self.ip,
+                self.port,
+                colour.end, 
+                colour.orange if self.trust > 0 else colour.blue,
+                self.trust,
+                colour.end,
+                self.transactions)
+        return "<%s Node %s:%i %.4fT/%i>" %\
+            ("Good" if not self.malicious else "Malicious",
+            self.ip,
+            self.port,
+            self.trust,
+            self.transactions)
 
 class Router(object):
     def __init__(self):
@@ -72,29 +89,16 @@ class TBucket(dict):
     """
     A set of pre-trusted peers.
 
-        Nodes residing on internal subnets. (No.)
-        Nodes supplied by app.default_nodes/options.bootstrap.
-        Nodes who're the first to be added to a new network.
-        Nodes who've previously earned high trust over time.
-
-    Peers have a normal placement in KBuckets but peers who also have a
-    reference from a TBucket are considered to be inherently trustworthy.
-    They can be relied upon to be honest in rating the trustworthiness of their
-    peers.
-
-    They must be the canonical reference to the Node instance as returned by
-    RoutingTable.get_existing_node.
-
-    Psuedocode translation from the sigma notation in EigenTrust++:
+    Psuedocode translation from EigenTrust++:
 
         S(i,j) = max(j.trust / j.transactions, 0)
         C(i,j) = max(max(S(i,j) / max(sum(i,m), 0)), len(P))
         Where P is the set of pre-trusted peers.
 
         SIMILARITY of feedbacks from peers u and v is defined as:
-        sim(u,v) = 1 - sqrt(sum(pow((tr(u,w) - tr(v,w)),2)) / len(common_peers(u,v)))
+        sim(u,v) = 1 - sqrt(sum(pow((tr(u,w) - tr(v,w)),2)) / len(trnsacts_btwn(u,v)))
               tr = v.trust, u.trust / R0(u, v) 
-        Where R(u,v) is the cardinality of the set of transactions between u and v.
+        Where R(u,v) is the amount of transactions between u and v.
         
         CREDIBILITY of feedbacks is defined as:
         f(i,j)  = sim(i,j) / sum([sim(i,m) for i in R1(i)]
@@ -111,8 +115,9 @@ class TBucket(dict):
 
     """
     def __init__(self, router, *args, **kwargs):
-        self.alpha      = 0.0
-        self.beta       = 0.85
+        self.alpha      = None  # initial active node for matrix activation
+        self.beta       = 0.85  # proportion factor 
+        self.gamma      = 0.0
         self.iterations = 100
         self.router     = router
         self.messages   = []
@@ -131,7 +136,6 @@ class TBucket(dict):
         return r
 
     def C(self, i, j):
-        #
         score = 0
         for _, m in enumerate(self):
             if _ >= self.iterations: break
@@ -146,8 +150,8 @@ class TBucket(dict):
 
     def sim(self, u, v):
         score = 0
-        common_peers = self.common_peers(u,v)
-        s = sum([pow((self.tr(u,w) - self.tr(v,w)),2) for w in common_peers])
+        common_peers = self.common_peers(u, v)
+        s = sum([pow((self.tr(u, w) - self.tr(v, w)), 2) for w in common_peers])
         if not common_peers:
             return 0
         s = s / len(common_peers)
@@ -252,6 +256,18 @@ class TBucket(dict):
         j = [tuple(p['node']) for p in j if p['transactions'] > 0]
         return list(set(i).intersection(j))
 
+    def aggregate_trust(self):
+        AC    = []
+        peers = self.router.peers
+        x     = len(peers)
+        if x / 5:
+            x = x / 5
+        elif x / 2:
+            x = x / 2
+        for i in range(x):
+            AC.append(peers[i:i+x])
+        return AC
+
     def calculate_trust(self):
         """
         Weight peers by the ratings assigned to them via trusted peers.
@@ -262,6 +278,8 @@ class TBucket(dict):
                 (remote_peer, new_trust))
             remote_peer.trust = new_trust
         self.read_messages()
+        AC = self.aggregate_trust()
+        log(AC)
 
     def read_messages(self):
         for message in self.messages:
@@ -274,12 +292,13 @@ class TBucket(dict):
     def __repr__(self):
         return "<TBucket of %i pre-trusted peers>" % len(self)
 
-def generate_routers(amount, with_existing_transactions=False):
+def generate_routers(options, with_existing_transactions=False):
     routers = []
-    for i in range(amount):
+    for i in range(options.nodes):
         router = Router()
         if with_existing_transactions:
             router.node = fabricate_transactions(router.node)
+        router.node.colour = options.colour
         routers.append(router)
 
     for router in routers:
@@ -347,5 +366,23 @@ def invoke_ptpython(env={}):
     print("\n^D to exit.")
     embed(locals=l, configure=configure)
 
-def log(message): print message
+def log(message):
+    if not isinstance(message, (str, unicode)):
+        message = pprint.pformat(message)
+    print message
+
+class colour:
+    purple = '\033[95m' 
+    blue = '\033[94m'
+    green = '\033[92m'
+    orange = '\033[93m'
+    red = '\033[91m'
+    end = '\033[0m'
+    def disable(self):
+        self.purple = ''
+        self.blue = ''
+        self.green = ''
+        self.orange = ''
+        self.red = ''
+        self.end = ''
 

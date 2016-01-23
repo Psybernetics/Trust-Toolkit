@@ -2,8 +2,8 @@
 import utils
 import random
 
-def scenario_one(node_count):
-    routers = utils.generate_routers(node_count)
+def scenario_one(options):
+    routers = utils.generate_routers(options)
     router = routers[0]
     for peer in router.peers[:4]:
         router.tbucket[peer.long_id] = peer
@@ -18,6 +18,51 @@ def scenario_one(node_count):
         print router
         router.tbucket.calculate_trust()
 
+def thread_model_a(options):
+    """
+    Independently malicious peers who're not initially aware of eachother
+    """
+    pass
+
+def thread_model_b(options):
+    """
+    Chain of Malicious Collectives who know eachother upfront and
+    deterministically give a high trust value to another malicious peer.
+    Resembles a malicious chain of mutual high local trust values.
+    """
+    pass
+
+def thread_model_c(options):
+    """
+    Malicious Collectives with camouflage.
+    Malicious peers try to earn high local trust from good peers by providing
+    authentic serices in f% of all cases.
+    """
+    pass
+
+def thread_model_d(options):
+    """
+    Malicious peers who are strategically organised into two groups.
+    One group of peers act as normal peers and try to increase their global
+    reputation by only providing good services and use the reputation they
+    gain to boost the trust values of another group of malicious peers.
+    """
+    pass
+
+def thread_model_e(options):
+    """
+    Sybil attack. A thousand malicious peers who only provide bad services,
+    who're then replaced with a new similarly malicious identity once contacted
+    by good peers.
+    """
+    pass
+
+def thread_model_f(options):
+    """
+    Virus disseminating peers who send one inauthentic virus infected file every
+    100th request.
+    """
+    pass
 
 map = {
         "one": scenario_one,
