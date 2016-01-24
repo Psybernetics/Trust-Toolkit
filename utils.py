@@ -1,7 +1,6 @@
 # _*_ coding: utf-8 _*_
 import math
 import time
-import copy
 import pprint
 import random
 import hashlib
@@ -9,7 +8,7 @@ import binascii
 from ptpython.repl import embed
 
 class Node(object):
-    def __init__(self, id=None, ip="127.0.0.1", port=None):
+    def __init__(self, id=None, ip="127.0.0.1", port=None, router=None):
         if isinstance(id, long):
             id = binascii.unhexlify('%x' % id)
         self.id           = id or hashlib.sha1(time.asctime()).digest()
@@ -17,10 +16,10 @@ class Node(object):
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0
         self.colour       = False
+        self.router       = router
         self.epsilon      = 0.0001
         self.long_id      = long(self.id.encode("hex"), 16)
         self.transactions = 0
-        self.malicious    = False
 
     @property
     def threeple(self):
@@ -28,10 +27,17 @@ class Node(object):
 
     @property
     def copy(self):
-        return copy.deepcopy(self)
+        # NOTE: Don't deepcopy(self) unless you want the attached graph..
+        node         = Node(*self.threeple)
+        node.epsilon = self.epsilon
+        node.colour  = self.colour
+        return node
 
-    def transact(self):
-        self.trust += self.epsilon
+    def transact(self, positively=True):
+        if positively:
+            self.trust += self.epsilon
+        else:
+            self.trust -= self.epsilon
         self.transactions += 1
 
     def jsonify(self):
@@ -47,9 +53,12 @@ class Node(object):
         return False
 
     def __repr__(self):
+        malicious = None
+        if self.router:
+            malicious = self.router.malicious
         if self.colour:
             return "<Node %s%s:%i%s %s%.4fT%s/%i>" %\
-                (colour.red if self.malicious else colour.green,
+                (colour.red if malicious else colour.green,
                 self.ip,
                 self.port,
                 colour.end, 
@@ -58,7 +67,7 @@ class Node(object):
                 colour.end,
                 self.transactions)
         return "<%s Node %s:%i %.4fT/%i>" %\
-            ("Good" if not self.malicious else "Malicious",
+            ("Good" if not malicious else "Malicious",
             self.ip,
             self.port,
             self.trust,
@@ -66,18 +75,27 @@ class Node(object):
 
 class Router(object):
     def __init__(self):
-        self.id      = hashlib.sha1(time.asctime()).hexdigest()
-        self.node    = Node()
-        self.network = "EigenTrust++ Test Network"
-        self.peers   = []
-        self.routers = []
-        self.tbucket = TBucket(self)
+        self.id           = hashlib.sha1(time.asctime()).hexdigest()
+        self.node         = Node(router=self)
+        self.network      = "EigenTrust++ Test Network"
+        self.peers        = []
+        self.routers      = []
+        self.tbucket      = TBucket(self)
+        self.malicious    = False
 
     def get(self, nodeple):
         nodeple = list(nodeple)
         for p in self.peers:
             if p.threeple == nodeple:
                 return p
+
+    def transact_with(self, peer, positively=True):
+        peer.transact(positively)
+        for router in self.routers:
+            for node in router.peers:
+                if node == self.node or node in self.peers:
+                    continue
+                self.peers.append(node.copy)
 
     def __iter__(self):
         return iter(self.peers)

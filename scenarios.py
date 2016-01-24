@@ -3,6 +3,8 @@ import utils
 import random
 
 def scenario_one(options):
+    # TODO: Pre-trusted and malicious peers with at least 10 neighbours
+    #       Good peers with at least 2 neighbours.
     routers = utils.generate_routers(options)
     router = routers[0]
     for peer in router.peers[:4]:
@@ -10,7 +12,7 @@ def scenario_one(options):
     
     for peer in router:
         for _ in range(random.randint(0,10)):
-            peer.transact()
+            router.transact_with(peer)
 
     router.tbucket.calculate_trust()
     return {"routers": routers}

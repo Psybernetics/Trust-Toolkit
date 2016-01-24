@@ -7,7 +7,7 @@ import optparse
 import scenarios
 
 if __name__ == "__main__":
-    description = "The Psybernetics Distributed Trust Framework"
+    description = "The Psybernetics Distributed Trust Toolkit"
     epilog = "Available scenarios: %s" % ",".join(scenarios.map.keys())
 
     parser = optparse.OptionParser(prog=sys.argv[0], version=0.01, description=description, epilog=epilog)
