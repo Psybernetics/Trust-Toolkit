@@ -14,7 +14,7 @@ class Node(object):
         self.id           = id or hashlib.sha1(time.asctime()).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
-        self.trust        = 0
+        self.trust        = 0.50
         self.colour       = False
         self.router       = router
         self.epsilon      = 0.0001
@@ -77,7 +77,7 @@ class Router(object):
     def __init__(self):
         self.id           = hashlib.sha1(time.asctime()).hexdigest()
         self.node         = Node(router=self)
-        self.network      = "EigenTrust++ Test Network"
+        self.network      = "Test Network"
         self.peers        = []
         self.routers      = []
         self.tbucket      = TBucket(self)
@@ -133,7 +133,6 @@ class TBucket(dict):
 
     """
     def __init__(self, router, *args, **kwargs):
-        self.alpha      = None  # initial active node for matrix activation
         self.beta       = 0.85  # proportion factor 
         self.gamma      = 0.0
         self.iterations = 100
@@ -292,7 +291,7 @@ class TBucket(dict):
         """
         for remote_peer in self.router:
             new_trust = self.t(self.router.node, remote_peer)
-            self.messages.append("Recalculated trust of %s as %i." %\
+            self.messages.append("Recalculated trust of %s as %.4f." %\
                 (remote_peer, new_trust))
             remote_peer.trust = new_trust
         self.read_messages()

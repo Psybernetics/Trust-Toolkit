@@ -7,7 +7,7 @@ def scenario_one(options):
     #       Good peers with at least 2 neighbours.
     routers = utils.generate_routers(options)
     router = routers[0]
-    for peer in router.peers[:4]:
+    for peer in router.peers[:options.pre_trusted]:
         router.tbucket[peer.long_id] = peer
     
     for peer in router:
