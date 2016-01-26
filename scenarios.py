@@ -78,7 +78,36 @@ def threat_model_f(options):
     Virus disseminating peers who send one inauthentic virus infected file every
     100th request.
     """
-    pass
+    class EvilRouter(utils.Router):
+
+        def __init__(self):
+            self.counter       = 0
+            probably_malicious = True
+            utils.Router.__init__(self)
+
+        @property
+        def malicious(self):
+            self.counter += 1
+            return not self.counter % 100
+
+    bad_peers = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    good_peer = utils.Router()
+    good_peer.routers = bad_peers
+    [r.routers.append(good_peer) for r in bad_peers]
+
+    utils.introduce(good_peer, random.sample(bad_peers, options.nodes))
+
+
+    t_count = 10000
+    utils.log("Emulating %s transactions with each peer." % "{:,}".format(t_count))
+    for _ in range(t_count):
+        for p in good_peer.peers:
+            good_peer.transact_with(p)
+    good_peer.tbucket.calculate_trust()
+    
+
+    bad_peers.insert(0, good_peer)
+    return {"routers": bad_peers}
 
 map = {
         "one": scenario_one,

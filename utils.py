@@ -5,6 +5,7 @@ import pprint
 import random
 import hashlib
 import binascii
+import datetime
 
 class Node(object):
     def __init__(self, id=None, ip="127.0.0.1", port=None, router=None):
@@ -174,7 +175,7 @@ class TBucket(dict):
         if not j.transactions:
             return 0
         r = max(j.trust / j.transactions, 0)
-        print("S: %s %s %i" % (i, j, r))
+        log("S: %s %s %i" % (i, j, r))
         return r
 
     def C(self, i, j):
@@ -187,7 +188,7 @@ class TBucket(dict):
         if not score:
             return 0
         s = self.S(i,j) / score
-        print("C: %s %s %i" % (i, j, s))
+        log("C: %s %s %i" % (i, j, s))
         return s
 
     def sim(self, u, v):
@@ -198,7 +199,7 @@ class TBucket(dict):
             return 0
         s = s / len(common_peers)
         sim = 1 - math.sqrt(s)
-        print("sim: %s %s %i" % (u, v, sim))
+        log("sim: %s %s %i" % (u, v, sim))
         return sim
 
     def tr(self, u, w):
@@ -211,7 +212,7 @@ class TBucket(dict):
             tr = 0
         else:
             tr = u.trust + w.trust / s
-        print("tr: %s %s %i" % (u, w, tr))
+        log("tr: %s %s %i" % (u, w, tr))
         return tr
 
     def R0(self, u, v):
@@ -235,7 +236,7 @@ class TBucket(dict):
         else:
             R0 = 0
     
-        print("R0: %s %s %i" % (u, v, R0))
+        log("R0: %s %s %i" % (u, v, R0))
         return R0
 
     def R1(self, i):
@@ -244,7 +245,7 @@ class TBucket(dict):
             data.extend(get(p, self.router.network))
         
         results = [p for p in data if tuple(p['node']) == i.threeple and p['transactions']]
-        print("R1: %s %s" % (i, str(results)))
+        log("R1: %s %s" % (i, str(results)))
         return results
 
     def f(self, i, j):
@@ -253,12 +254,12 @@ class TBucket(dict):
             f = 0
         else:
             f = self.sim(i,j) / s
-        print("f: %s %s %i" % (i, j, f))
+        log("f: %s %s %i" % (i, j, f))
         return f
 
     def fC(self, i, j):
         fC = self.f(i,j) * self.C(i, j)
-        print("fC: %s %s %i" % (i, j, fC))
+        log("fC: %s %s %i" % (i, j, fC))
         return fC
 
     def l(self, i, j):
@@ -267,7 +268,7 @@ class TBucket(dict):
             l = 0
         else:
             l = max(self.fC(i,j), 0) / s
-        print("l: %s %s %i" % (i, j, l))
+        log("l: %s %s %i" % (i, j, l))
         return l
 
     def t(self, i, j):
@@ -275,12 +276,12 @@ class TBucket(dict):
         for _, k in enumerate(self.router):
             if _ >= self.iterations: break
             score += self.l(i,k) + self.C(k,j)
-        print("t: %s %s %i" % (i, j, score))
+        log("t: %s %s %i" % (i, j, score))
         return score
 
     def w(self, i, j):
         w = (i.trust - self.beta) * self.C(j,k) + self.beta * self.sim(j,i)
-        print("w: %i" % w)
+        log("w: %i" % w)
         return w
 
     def common_peers(self, i, j):
@@ -334,21 +335,18 @@ class TBucket(dict):
     def __repr__(self):
         return "<TBucket of %i pre-trusted peers>" % len(self)
 
-def generate_routers(options, minimum=None, pre_connected=False):
+def generate_routers(options, minimum=None, router_class=Router):
     routers = []
     node_count = max(options.nodes, minimum)
     log("Creating %s routing tables." % "{:,}".format(node_count))
 
     for _ in range(node_count):
-        router = Router()
+        router = router_class()
         router.node.colour = options.colour
         routers.append(router)
 
     for router in routers:
         router.routers = [r for r in routers if r != router]
-    
-    if pre_connected:
-        introduce(routers)
     
     return routers
 
@@ -373,8 +371,9 @@ def introduce(routers, secondary=[]):
             router.peers.extend([r.node.copy() for r in routers if r != router])
             router.peers = list(set(router.peers))
     else:
-        log("Introducing a set of %s routing tables to a set of %s routing tables." % \
-            ("{:,}".format(len(secondary)), "{:,}".format(len(routers))))
+        log("Introducing %s to %s." % \
+            ("a set of {:,} routing tables".format(len(routers)) if len(routers) > 1 else "1 routing table",
+                "a set of {:,} routing tables".format(len(secondary)) if len(secondary) > 1 else "1 routing table"))
         for router in routers:
             router.peers.extend([r.node.copy() for r in secondary if r != router])
             router.peers = list(set(router.peers))
@@ -424,27 +423,33 @@ class tabulate(object):
             res.insert(1, _r(self.ul))
         return('\n'.join(res))
 
-def table(data):
-    print(tabulate(format(data))(data))
+def table(data, ts=False):
+    log(tabulate(format(data))(data), with_timestamp=ts)
 
 def invoke_ptpython(env={}):
     try:
         from ptpython.repl import embed
     except ImportError:
-        print("-repl requires ptpython")
-        print("Please use pip install ptpython and try again")
+        log("-repl requires ptpython")
+        log("Please use \"pip install ptpython\" and try again")
         raise SystemExit
     p = pprint.PrettyPrinter()
     p = p.pprint
     l = {"p": p}
     l.update(env)
-    print("\n^D to exit.")
+    log("\n^D to exit.", with_timestamp=False)
     embed(locals=l, configure=configure)
 
-def log(message):
+def log(message, with_timestamp=True):
     if not isinstance(message, (str, unicode)):
         message = pprint.pformat(message)
-    print(message)
+
+    if not with_timestamp:
+        print(message)
+        return
+
+    for _ in message.split("\n"):
+        print(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + _)
 
 class colour:
     purple = '\033[95m' 
