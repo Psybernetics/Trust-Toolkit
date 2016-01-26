@@ -175,7 +175,7 @@ class TBucket(dict):
         if not j.transactions:
             return 0
         r = max(j.trust / j.transactions, 0)
-        log("S: %s %s %i" % (i, j, r))
+        log("S:   %s %s %i" % (i, j, r))
         return r
 
     def C(self, i, j):
@@ -188,7 +188,7 @@ class TBucket(dict):
         if not score:
             return 0
         s = self.S(i,j) / score
-        log("C: %s %s %i" % (i, j, s))
+        log("C:   %s %s %i" % (i, j, s))
         return s
 
     def sim(self, u, v):
@@ -212,7 +212,7 @@ class TBucket(dict):
             tr = 0
         else:
             tr = u.trust + w.trust / s
-        log("tr: %s %s %i" % (u, w, tr))
+        log("tr:  %s %s %i" % (u, w, tr))
         return tr
 
     def R0(self, u, v):
@@ -236,7 +236,7 @@ class TBucket(dict):
         else:
             R0 = 0
     
-        log("R0: %s %s %i" % (u, v, R0))
+        log("R0:  %s %s %i" % (u, v, R0))
         return R0
 
     def R1(self, i):
@@ -245,7 +245,7 @@ class TBucket(dict):
             data.extend(get(p, self.router.network))
         
         results = [p for p in data if tuple(p['node']) == i.threeple and p['transactions']]
-        log("R1: %s %s" % (i, str(results)))
+        log("R1:  %s %s" % (i, str(results)))
         return results
 
     def f(self, i, j):
@@ -254,12 +254,12 @@ class TBucket(dict):
             f = 0
         else:
             f = self.sim(i,j) / s
-        log("f: %s %s %i" % (i, j, f))
+        log("f:   %s %s %i" % (i, j, f))
         return f
 
     def fC(self, i, j):
         fC = self.f(i,j) * self.C(i, j)
-        log("fC: %s %s %i" % (i, j, fC))
+        log("fC:  %s %s %i" % (i, j, fC))
         return fC
 
     def l(self, i, j):
@@ -268,7 +268,7 @@ class TBucket(dict):
             l = 0
         else:
             l = max(self.fC(i,j), 0) / s
-        log("l: %s %s %i" % (i, j, l))
+        log("l:   %s %s %i" % (i, j, l))
         return l
 
     def t(self, i, j):
@@ -276,12 +276,12 @@ class TBucket(dict):
         for _, k in enumerate(self.router):
             if _ >= self.iterations: break
             score += self.l(i,k) + self.C(k,j)
-        log("t: %s %s %i" % (i, j, score))
+        log("t:   %s %s %i" % (i, j, score))
         return score
 
     def w(self, i, j):
         w = (i.trust - self.beta) * self.C(j,k) + self.beta * self.sim(j,i)
-        log("w: %i" % w)
+        log("w:   %i" % w)
         return w
 
     def common_peers(self, i, j):
