@@ -5,7 +5,6 @@ import pprint
 import random
 import hashlib
 import binascii
-from ptpython.repl import embed
 
 class Node(object):
     def __init__(self, id=None, ip="127.0.0.1", port=None, router=None):
@@ -25,12 +24,12 @@ class Node(object):
     def threeple(self):
         return [self.long_id, self.ip, self.port]
 
-    @property
-    def copy(self):
+    def copy(self, router=None):
         # NOTE: Don't deepcopy(self) unless you want the attached graph..
         node         = Node(*self.threeple)
         node.epsilon = self.epsilon
         node.colour  = self.colour
+        node.router  = router or self.router
         return node
 
     def transact(self, positively=True):
@@ -55,7 +54,7 @@ class Node(object):
     def __repr__(self):
         malicious = None
         if self.router:
-            malicious = self.router.malicious
+            malicious = self.router.probably_malicious
         if self.colour:
             return "<Node %s%s:%i%s %s%.4fT%s/%i>" %\
                 (colour.red if malicious else colour.green,
@@ -75,13 +74,24 @@ class Node(object):
 
 class Router(object):
     def __init__(self):
-        self.id           = hashlib.sha1(time.asctime()).hexdigest()
-        self.node         = Node(router=self)
-        self.network      = "Test Network"
-        self.peers        = []
-        self.routers      = []
-        self.tbucket      = TBucket(self)
-        self.malicious    = False
+        self.id                 = hashlib.sha1(time.asctime()).hexdigest()
+        self.node               = Node(router=self)
+        self.network            = "Test Network"
+        self.peers              = []
+        self.routers            = []
+        self.tbucket            = TBucket(self)
+        self.probably_malicious = False
+
+    @property
+    def malicious(self):
+        """
+        Override this property to programatically define the behavior of
+        malicious peers.
+       
+        You could, for instance, make a peer routing table that's malicious
+        only on Thursdays.
+        """
+        return self.probably_malicious
 
     def get(self, nodeple):
         nodeple = list(nodeple)
@@ -89,13 +99,28 @@ class Router(object):
             if p.threeple == nodeple:
                 return p
 
-    def transact_with(self, peer, positively=True):
-        peer.transact(positively)
-        for router in self.routers:
-            for node in router.peers:
-                if node == self.node or node in self.peers:
-                    continue
-                self.peers.append(node.copy)
+    def transact_with(self, peer):
+        """
+        Update local trust rating and transaction count of peer
+        """
+        if hex(id(peer)) == hex(id(self.node)):
+            return
+        
+        router = filter(lambda x: x.node == peer, self.routers)
+        if not any(router): return
+        router = router[0]
+        
+        # Routers can be subclassed to turn their malicious attr into a property
+        # with statistical variance. E.g. to return True every 100th transaction.
+        if not router.malicious:
+            peer.transact(positively=True)
+        else:
+            peer.transact(positively=False)
+        
+        for node in router.peers:
+            if node == self.node or node in self.peers:
+                continue
+            self.peers.append(node.copy(router=self))
 
     def __iter__(self):
         return iter(self.peers)
@@ -149,7 +174,7 @@ class TBucket(dict):
         if not j.transactions:
             return 0
         r = max(j.trust / j.transactions, 0)
-        print "S: %s %s %i" % (i, j, r)
+        print("S: %s %s %i" % (i, j, r))
         return r
 
     def C(self, i, j):
@@ -162,7 +187,7 @@ class TBucket(dict):
         if not score:
             return 0
         s = self.S(i,j) / score
-        print "C: %s %s %i" % (i, j, s)
+        print("C: %s %s %i" % (i, j, s))
         return s
 
     def sim(self, u, v):
@@ -173,7 +198,7 @@ class TBucket(dict):
             return 0
         s = s / len(common_peers)
         sim = 1 - math.sqrt(s)
-        print "sim: %s %s %i" % (u, v, sim)
+        print("sim: %s %s %i" % (u, v, sim))
         return sim
 
     def tr(self, u, w):
@@ -186,7 +211,7 @@ class TBucket(dict):
             tr = 0
         else:
             tr = u.trust + w.trust / s
-        print "tr: %s %s %i" % (u, w, tr)
+        print("tr: %s %s %i" % (u, w, tr))
         return tr
 
     def R0(self, u, v):
@@ -210,7 +235,7 @@ class TBucket(dict):
         else:
             R0 = 0
     
-        print "R0: %s %s %i" % (u, v, R0)
+        print("R0: %s %s %i" % (u, v, R0))
         return R0
 
     def R1(self, i):
@@ -219,7 +244,7 @@ class TBucket(dict):
             data.extend(get(p, self.router.network))
         
         results = [p for p in data if tuple(p['node']) == i.threeple and p['transactions']]
-        print "R1: %s %s" % (i, str(results))
+        print("R1: %s %s" % (i, str(results)))
         return results
 
     def f(self, i, j):
@@ -228,12 +253,12 @@ class TBucket(dict):
             f = 0
         else:
             f = self.sim(i,j) / s
-        print "f: %s %s %i" % (i, j, f)
+        print("f: %s %s %i" % (i, j, f))
         return f
 
     def fC(self, i, j):
         fC = self.f(i,j) * self.C(i, j)
-        print "fC: %s %s %i" % (i, j, fC)
+        print("fC: %s %s %i" % (i, j, fC))
         return fC
 
     def l(self, i, j):
@@ -242,7 +267,7 @@ class TBucket(dict):
             l = 0
         else:
             l = max(self.fC(i,j), 0) / s
-        print "l: %s %s %i" % (i, j, l)
+        print("l: %s %s %i" % (i, j, l))
         return l
 
     def t(self, i, j):
@@ -250,12 +275,12 @@ class TBucket(dict):
         for _, k in enumerate(self.router):
             if _ >= self.iterations: break
             score += self.l(i,k) + self.C(k,j)
-        print "t: %s %s %i" % (i, j, score)
+        print("t: %s %s %i" % (i, j, score))
         return score
 
     def w(self, i, j):
         w = (i.trust - self.beta) * self.C(j,k) + self.beta * self.sim(j,i)
-        print "w: %i" % w
+        print("w: %i" % w)
         return w
 
     def common_peers(self, i, j):
@@ -309,24 +334,31 @@ class TBucket(dict):
     def __repr__(self):
         return "<TBucket of %i pre-trusted peers>" % len(self)
 
-def generate_routers(options, with_existing_transactions=False):
+def generate_routers(options, minimum=None, pre_connected=False):
     routers = []
-    for i in range(options.nodes):
+    for i in range(max(options.nodes, minimum)):
         router = Router()
-        if with_existing_transactions:
-            router.node = fabricate_transactions(router.node)
         router.node.colour = options.colour
         routers.append(router)
 
     for router in routers:
-        router.peers   = [r.node.copy for r in routers if r != router]
         router.routers = [r for r in routers if r != router]
+    
+    if pre_connected:
+        introduce(routers)
+    
     return routers
 
 def fabricate_transactions(node, floor=5, ceiling=75):
     node.transactions = random.randint(floor, ceiling)
     node.trust        = random.randint(floor, node.transactions)
     return node
+
+def introduce(routers):
+    for router in routers:
+        router.peers.extend([r.node.copy(router) for r in routers if r != router])
+        router.peers = list(set(router.peers))
+    return routers
 
 def configure(repl):
     repl.prompt_style                   = "ipython"
@@ -373,9 +405,15 @@ class tabulate(object):
         return('\n'.join(res))
 
 def table(data):
-    print tabulate(format(data))(data)
+    print(tabulate(format(data))(data))
 
 def invoke_ptpython(env={}):
+    try:
+        from ptpython.repl import embed
+    except ImportError:
+        print("-repl requires ptpython")
+        print("Please use pip install ptpython and try again")
+        raise SystemExit
     p = pprint.PrettyPrinter()
     p = p.pprint
     l = {"p": p}
@@ -386,7 +424,7 @@ def invoke_ptpython(env={}):
 def log(message):
     if not isinstance(message, (str, unicode)):
         message = pprint.pformat(message)
-    print message
+    print(message)
 
 class colour:
     purple = '\033[95m' 

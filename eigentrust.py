@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # _*_ coding: utf-8 _*_
 import sys
 import utils
@@ -17,14 +17,28 @@ if __name__ == "__main__":
     parser.add_option("-n", "--nodes",       dest="nodes", action="store", default=10, help="(default: 10)")
     parser.add_option("-p", "--pre-trusted", dest="pre_trusted", action="store", default=2, help="(default: 2)")
     parser.add_option("-c", "--colour",      dest="colour", action="store_true", default=False)
+    parser.add_option("--describe",          dest="describe", action="store", default=None, help="Print a scenarios' documentation.")
     (options, args) = parser.parse_args()
 
-    if not options.nodes.isdigit():
-        print "--nodes must be an integer."
+    if options.describe:
+        if options.describe in scenarios.map:
+            print(scenarios.map[options.describe].__doc__)
+        else:
+            print("Error. Unknown scenario.")
+
+    if isinstance(options.nodes, (unicode, str)) and not options.nodes.isdigit():
+        print("--nodes must be an integer.")
         raise SystemExit
 
     options.nodes = int(options.nodes)
 
+    if isinstance(options.pre_trusted, (unicode, str)) and \
+            not options.pre_trusted.isdigit():
+        print("--pre-trusted must be an integer.")
+        raise SystemExit
+
+    options.pre_trusted = int(options.pre_trusted)
+    
     returned_data = {}
 
     if options.scenario:
@@ -33,7 +47,7 @@ if __name__ == "__main__":
             if not isinstance(returned_data, dict):
                 returned_data = {}
         else:
-            print "Error. Unknown scenario."
+            print("Error. Unknown scenario.")
 
     returned_data.update({"utils": utils})
 
