@@ -24,7 +24,7 @@ if __name__ == "__main__":
         if options.describe in scenarios.map:
             print(scenarios.map[options.describe].__doc__)
         else:
-            print("Error. Unknown scenario.")
+            print("Error: Unknown scenario.")
 
     if isinstance(options.nodes, (unicode, str)) and not options.nodes.isdigit():
         print("--nodes must be an integer.")
@@ -47,7 +47,8 @@ if __name__ == "__main__":
             if not isinstance(returned_data, dict):
                 returned_data = {}
         else:
-            print("Error. Unknown scenario.")
+            print("Error: Unknown scenario.")
+            raise SystemExit
 
     returned_data.update({"utils": utils})
 

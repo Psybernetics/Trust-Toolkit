@@ -16,18 +16,19 @@ def scenario_one(options):
 
     utils.introduce(good_routers)
     utils.introduce(bad_routers)
-    for r in good_routers:
-        utils.introduce([r, random.choice(bad_routers)])
+    utils.introduce(good_routers, random.sample(bad_routers, 2))
 
-    router = routers[0]
-    for peer in router.peers[:options.pre_trusted]:
-        router.tbucket[peer.long_id] = peer
+    for router in good_routers:
+        for peer in router.peers[:options.pre_trusted]:
+            if peer.router in good_routers:
+                router.tbucket[peer.long_id] = peer
     
-    for peer in router:
-        for _ in range(random.randint(0,10)):
-            router.transact_with(peer)
+        for peer in router:
+            for _ in range(random.randint(0,10)):
+                router.transact_with(peer)
 
-    router.tbucket.calculate_trust()
+    for router in good_routers:
+        router.tbucket.calculate_trust()
 
     # The return value of a scenario is used to populate "locals" in the event
     # that you choose to use the --repl flag to spawn an interactive interpreter.
@@ -77,7 +78,36 @@ def threat_model_f(options):
     Virus disseminating peers who send one inauthentic virus infected file every
     100th request.
     """
-    pass
+    class EvilRouter(utils.Router):
+
+        def __init__(self):
+            self.counter       = 0
+            probably_malicious = True
+            utils.Router.__init__(self)
+
+        @property
+        def malicious(self):
+            self.counter += 1
+            return not self.counter % 100
+
+    bad_peers = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    good_peer = utils.Router()
+    good_peer.routers = bad_peers
+    [r.routers.append(good_peer) for r in bad_peers]
+
+    utils.introduce(good_peer, random.sample(bad_peers, options.nodes))
+
+
+    t_count = 10000
+    utils.log("Emulating %s transactions with each peer." % "{:,}".format(t_count))
+    for _ in range(t_count):
+        for p in good_peer.peers:
+            good_peer.transact_with(p)
+    good_peer.tbucket.calculate_trust()
+    
+
+    bad_peers.insert(0, good_peer)
+    return {"routers": bad_peers}
 
 map = {
         "one": scenario_one,
