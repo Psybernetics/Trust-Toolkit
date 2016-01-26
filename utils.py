@@ -336,7 +336,10 @@ class TBucket(dict):
 
 def generate_routers(options, minimum=None, pre_connected=False):
     routers = []
-    for i in range(max(options.nodes, minimum)):
+    node_count = max(options.nodes, minimum)
+    log("Creating %s routing tables." % "{:,}".format(node_count))
+
+    for _ in range(node_count):
         router = Router()
         router.node.colour = options.colour
         routers.append(router)
@@ -354,10 +357,27 @@ def fabricate_transactions(node, floor=5, ceiling=75):
     node.trust        = random.randint(floor, node.transactions)
     return node
 
-def introduce(routers):
-    for router in routers:
-        router.peers.extend([r.node.copy(router) for r in routers if r != router])
-        router.peers = list(set(router.peers))
+def introduce(routers, secondary=[]):
+    """
+    Introduce a set of routers to one another or all routers of one set to all
+    routers of a second set.
+    """
+    if not isinstance(routers, list):
+        routers = [routers]
+    if not isinstance(secondary, list):
+        secondary = [secondary]
+    
+    if not any(secondary):
+        log("Introducing %s routing tables to one another." % "{:,}".format(len(routers)))
+        for router in routers:
+            router.peers.extend([r.node.copy() for r in routers if r != router])
+            router.peers = list(set(router.peers))
+    else:
+        log("Introducing a set of %s routing tables to a set of %s routing tables." % \
+            ("{:,}".format(len(secondary)), "{:,}".format(len(routers))))
+        for router in routers:
+            router.peers.extend([r.node.copy() for r in secondary if r != router])
+            router.peers = list(set(router.peers))
     return routers
 
 def configure(repl):

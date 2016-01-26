@@ -16,18 +16,19 @@ def scenario_one(options):
 
     utils.introduce(good_routers)
     utils.introduce(bad_routers)
-    for r in good_routers:
-        utils.introduce([r, random.choice(bad_routers)])
+    utils.introduce(good_routers, random.sample(bad_routers, 2))
 
-    router = routers[0]
-    for peer in router.peers[:options.pre_trusted]:
-        router.tbucket[peer.long_id] = peer
+    for router in good_routers:
+        for peer in router.peers[:options.pre_trusted]:
+            if peer.router in good_routers:
+                router.tbucket[peer.long_id] = peer
     
-    for peer in router:
-        for _ in range(random.randint(0,10)):
-            router.transact_with(peer)
+        for peer in router:
+            for _ in range(random.randint(0,10)):
+                router.transact_with(peer)
 
-    router.tbucket.calculate_trust()
+    for router in good_routers:
+        router.tbucket.calculate_trust()
 
     # The return value of a scenario is used to populate "locals" in the event
     # that you choose to use the --repl flag to spawn an interactive interpreter.
