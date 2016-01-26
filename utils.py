@@ -36,7 +36,7 @@ class Node(object):
         if positively:
             self.trust += self.epsilon
         else:
-            self.trust -= self.epsilon
+            self.trust -= 2 * self.epsilon
         self.transactions += 1
 
     def jsonify(self):
