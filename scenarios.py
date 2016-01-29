@@ -73,6 +73,8 @@ def threat_model_b(options):
             self.probably_malicious = True
 
         def render_peers(self):
+            print any(self.collective)
+            raise SystemExit
             response = []
             for peer in self.peers:
                 data = peer.jsonify()
@@ -82,9 +84,9 @@ def threat_model_b(options):
 
             return response
 
-    routers    = utils.generate_routers(options, minimum=70, router_class=EvilRouter)
-    good_peers = utils.generate_routers(options, minimum=30)
-    
+    routers    = utils.generate_routers(options, minimum=7, router_class=EvilRouter)
+    good_peers = utils.generate_routers(options, minimum=3)
+
     [setattr(r, "collective", routers) for r in routers]
 
     all_routers = []
@@ -96,7 +98,15 @@ def threat_model_b(options):
 
     utils.introduce(routers)
     utils.introduce(good_peers)
-    utils.introduce(good_peers, random.sample(routers, options.nodes / 4))
+
+    # Set good peers up with some pre-trusted friends
+    for router in good_peers:
+        for peer in random.sample(router.peers, 2):
+            router.tbucket[peer.long_id] = peer
+
+    divisor = 4
+    if options.nodes < 10: divisor = 2
+    utils.introduce(good_peers, random.sample(routers, options.nodes / divisor))
 
     utils.log("Emulating %s iterations of transactions with all peers." % "{:,}".format(options.transactions))
     for _ in range(options.transactions):

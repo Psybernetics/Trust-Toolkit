@@ -75,7 +75,7 @@ class Node(object):
 
 class Router(object):
     def __init__(self):
-        self.id                 = hashlib.sha1(time.asctime()).hexdigest()
+        self.id                 = hashlib.sha1(hex(id(self))).hexdigest()
         self.node               = Node(router=self)
         self.network            = "Test Network"
         self.peers              = []
