@@ -48,9 +48,9 @@ class Node(object):
         return response
 
     def __eq__(self, other):
-        if hasattr(other, "id") and self.id == other.id:
-            return True
-        return False
+        if not hasattr(other, "id") or not hasattr(other, "port"):
+            return False
+        return self.id == other.id and self.port == other.port
 
     def __repr__(self):
         malicious = None
@@ -141,6 +141,11 @@ class Router(object):
                 continue
             router.peers.append(node.copy(router=router))
 
+    def __eq__(self, other):
+        if not hasattr(other, "id"):
+            return False
+        return self.id == other.id
+
     def __iter__(self):
         return iter(self.peers)
 
@@ -186,7 +191,12 @@ class TBucket(dict):
         self.messages   = []
         dict.__init__(self, *args, **kwargs)
     
-    def get(self, node, endpoint):
+    def get(self, node, endpoint=""):
+        """
+        Ask a remote peer about their peers.
+        """
+        if not node:
+            return
         for router in self.router.routers:
             if router.node == node:
                 return router.render_peers()
@@ -327,11 +337,6 @@ class TBucket(dict):
         AC    = []
         peers = [peer for peer in self.router]
         x     = len(peers)
-        for remote_peer in peers:
-            new_trust = self.t(self.router.node, remote_peer)
-            self.messages.append("Recalculated trust of %s as %.4f." %\
-                (remote_peer, new_trust))
-            remote_peer.trust = new_trust
         if x / 5:
             x = x / 5
         elif x / 2:
@@ -344,9 +349,14 @@ class TBucket(dict):
         """
         Weight peers by the ratings assigned to them via trusted peers.
         """
-        AC = self.aggregate_trust()
+        for remote_peer in self.router.peers:
+            new_trust = self.t(self.router.node, remote_peer)
+            self.messages.append("Recalculated trust of %s as %.4f." %\
+                (remote_peer, new_trust))
+            remote_peer.trust = new_trust
+        # AC = self.aggregate_trust()
         self.read_messages()
-        log(AC)
+        # log(AC)
 
     def read_messages(self):
         for message in self.messages:
