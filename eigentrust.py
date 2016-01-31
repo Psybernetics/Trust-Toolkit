@@ -8,7 +8,7 @@ import scenarios
 
 if __name__ == "__main__":
     description = "The Psybernetics Distributed Trust Toolkit"
-    epilog = "Available scenarios: %s" % ", ".join(scenarios.map.keys())
+    epilog = "Available scenarios: %s" % ", ".join(sorted(scenarios.map.keys()))
 
     parser = optparse.OptionParser(prog=sys.argv[0], version=0.01, description=description, epilog=epilog)
     parser.set_usage(sys.argv[0] + " - --repl")
