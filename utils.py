@@ -28,8 +28,8 @@ class Node(object):
     def copy(self, router=None):
         # NOTE: Don't deepcopy(self) unless you want the attached graph..
         node         = Node(*self.threeple)
-        node.epsilon = self.epsilon
         node.colour  = self.colour
+        node.epsilon = self.epsilon
         node.router  = router or self.router
         return node
 
@@ -48,16 +48,16 @@ class Node(object):
         return response
 
     def __eq__(self, other):
-        if hasattr(other, "id") and self.id == other.id:
-            return True
-        return False
+        if not hasattr(other, "id") or not hasattr(other, "port"):
+            return False
+        return self.id == other.id and self.port == other.port
 
     def __repr__(self):
         malicious = None
         if self.router:
             malicious = self.router.probably_malicious
         if self.colour:
-            return "<Node %s%s:%i%s %s%.4fT%s/%i>" %\
+            return "<Node %s%s:%5i%s %s%.4fT%s/%i>" %\
                 (colour.red if malicious else colour.green,
                 self.ip,
                 self.port,
@@ -66,8 +66,8 @@ class Node(object):
                 self.trust,
                 colour.end,
                 self.transactions)
-        return "<%s Node %s:%i %.4fT/%i>" %\
-            ("Good" if not malicious else "Malicious",
+        return "<%s Node %s:%5i %.4fT/%i>" %\
+            ("+" if not malicious else "-",
             self.ip,
             self.port,
             self.trust,
@@ -75,7 +75,7 @@ class Node(object):
 
 class Router(object):
     def __init__(self):
-        self.id                 = hashlib.sha1(time.asctime()).hexdigest()
+        self.id                 = hashlib.sha1(hex(id(self))).hexdigest()
         self.node               = Node(router=self)
         self.network            = "Test Network"
         self.peers              = []
@@ -100,6 +100,13 @@ class Router(object):
             if p.threeple == nodeple:
                 return p
 
+    def render_peers(self):
+        """
+        This method is for overriding in test scenarios to emulate
+        routers who give positive trust ratings to malicious peers.
+        """
+        return [peer.jsonify() for peer in self.peers]
+
     def transact_with(self, peer):
         """
         Update local trust rating and transaction count of peer
@@ -107,27 +114,45 @@ class Router(object):
         if hex(id(peer)) == hex(id(self.node)):
             return
         
+        # Locate the routing table responsible for the peer we're dealing with
         router = filter(lambda x: x.node == peer, self.routers)
         if not any(router): return
         router = router[0]
         
-        # Routers can be subclassed to turn their malicious attr into a property
+        # Routers can be subclassed to turn their .malicious attr into a property
         # with statistical variance. E.g. to return True every 100th transaction.
         if not router.malicious:
             peer.transact(positively=True)
         else:
             peer.transact(positively=False)
         
+        #log("[%s] %s <-- %s" % \
+        #    ("+" if not maliciousness else "-", self.node, peer))
+
+        # Reinforce the network by making ourselves aware of this peers' peers
         for node in router.peers:
             if node == self.node or node in self.peers:
                 continue
             self.peers.append(node.copy(router=self))
 
+        # and make the peer routing table aware of our peers.
+        for node in self.peers:
+            if node == router.node or node in router.peers:
+                continue
+            router.peers.append(node.copy(router=router))
+
+    def __eq__(self, other):
+        if not hasattr(other, "id"):
+            return False
+        return self.id == other.id
+
     def __iter__(self):
         return iter(self.peers)
 
     def __repr__(self):
-        return "<Router %s with %i peers>" % (self.id, len(self.peers))
+        return "<%s %s %s with %i peers>" % \
+            ("-" if self.probably_malicious else "+",
+             self.__class__.__name__, self.id, len(self.peers))
 
 class TBucket(dict):
     """
@@ -166,16 +191,21 @@ class TBucket(dict):
         self.messages   = []
         dict.__init__(self, *args, **kwargs)
     
-    def get(self, node, endpoint):
-        for r in self.router.routers:
-            if r.node == node:
-                return [p.jsonify() for p in r.peers]
+    def get(self, node, endpoint=""):
+        """
+        Ask a remote peer about their peers.
+        """
+        if not node:
+            return
+        for router in self.router.routers:
+            if router.node == node:
+                return router.render_peers()
 
     def S(self, i, j):
         if not j.transactions:
             return 0
         r = max(j.trust / j.transactions, 0)
-        log("S: %s %s %i" % (i, j, r))
+        log("S:   %s %s %i" % (i, j, r))
         return r
 
     def C(self, i, j):
@@ -188,7 +218,7 @@ class TBucket(dict):
         if not score:
             return 0
         s = self.S(i,j) / score
-        log("C: %s %s %i" % (i, j, s))
+        log("C:   %s %s %i" % (i, j, s))
         return s
 
     def sim(self, u, v):
@@ -212,7 +242,7 @@ class TBucket(dict):
             tr = 0
         else:
             tr = u.trust + w.trust / s
-        log("tr: %s %s %i" % (u, w, tr))
+        log("tr:  %s %s %i" % (u, w, tr))
         return tr
 
     def R0(self, u, v):
@@ -236,7 +266,7 @@ class TBucket(dict):
         else:
             R0 = 0
     
-        log("R0: %s %s %i" % (u, v, R0))
+        log("R0:  %s %s %i" % (u, v, R0))
         return R0
 
     def R1(self, i):
@@ -245,7 +275,7 @@ class TBucket(dict):
             data.extend(get(p, self.router.network))
         
         results = [p for p in data if tuple(p['node']) == i.threeple and p['transactions']]
-        log("R1: %s %s" % (i, str(results)))
+        log("R1:  %s %s" % (i, str(results)))
         return results
 
     def f(self, i, j):
@@ -254,12 +284,12 @@ class TBucket(dict):
             f = 0
         else:
             f = self.sim(i,j) / s
-        log("f: %s %s %i" % (i, j, f))
+        log("f:   %s %s %i" % (i, j, f))
         return f
 
     def fC(self, i, j):
         fC = self.f(i,j) * self.C(i, j)
-        log("fC: %s %s %i" % (i, j, fC))
+        log("fC:  %s %s %i" % (i, j, fC))
         return fC
 
     def l(self, i, j):
@@ -268,7 +298,7 @@ class TBucket(dict):
             l = 0
         else:
             l = max(self.fC(i,j), 0) / s
-        log("l: %s %s %i" % (i, j, l))
+        log("l:   %s %s %i" % (i, j, l))
         return l
 
     def t(self, i, j):
@@ -276,12 +306,12 @@ class TBucket(dict):
         for _, k in enumerate(self.router):
             if _ >= self.iterations: break
             score += self.l(i,k) + self.C(k,j)
-        log("t: %s %s %i" % (i, j, score))
+        log("t:   %s %s %i" % (i, j, score))
         return score
 
     def w(self, i, j):
         w = (i.trust - self.beta) * self.C(j,k) + self.beta * self.sim(j,i)
-        log("w: %i" % w)
+        log("w:   %i" % w)
         return w
 
     def common_peers(self, i, j):
@@ -300,8 +330,12 @@ class TBucket(dict):
         return list(set(i).intersection(j))
 
     def aggregate_trust(self):
+        """
+        Performs t(self, remote_peer) for all peers in our routing table.
+        Performs matrix activation given the result.
+        """
         AC    = []
-        peers = self.router.peers
+        peers = [peer for peer in self.router]
         x     = len(peers)
         if x / 5:
             x = x / 5
@@ -315,14 +349,14 @@ class TBucket(dict):
         """
         Weight peers by the ratings assigned to them via trusted peers.
         """
-        for remote_peer in self.router:
+        for remote_peer in self.router.peers:
             new_trust = self.t(self.router.node, remote_peer)
             self.messages.append("Recalculated trust of %s as %.4f." %\
                 (remote_peer, new_trust))
             remote_peer.trust = new_trust
+        # AC = self.aggregate_trust()
         self.read_messages()
-        AC = self.aggregate_trust()
-        log(AC)
+        # log(AC)
 
     def read_messages(self):
         for message in self.messages:
