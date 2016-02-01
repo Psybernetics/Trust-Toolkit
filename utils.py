@@ -8,9 +8,16 @@ import binascii
 import datetime
 
 class Node(object):
+    """
+    Nodes are our local representation of remote routing tables.
+    A Node represents what a Router sees of another Router in the network.
+    """
     def __init__(self, id=None, ip="127.0.0.1", port=None, router=None):
+        
         if isinstance(id, long):
-            id = binascii.unhexlify('%x' % id)
+            try:    id = binascii.unhexlify('%x' % id)
+            except: return Node(id, ip, port, router)
+        
         self.id           = id or hashlib.sha1(time.asctime()).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
@@ -74,6 +81,10 @@ class Node(object):
             self.transactions)
 
 class Router(object):
+    """
+    A Router is responsible for maintaining awareness of other routing tables
+    and what their attributes are as network nodes.
+    """
     def __init__(self):
         self.id                 = hashlib.sha1(hex(id(self))).hexdigest()
         self.node               = Node(router=self)
@@ -187,7 +198,7 @@ class TBucket(dict):
         Where P is the set of pre-trusted peers.
 
         SIMILARITY of feedbacks from peers u and v is defined as:
-        sim(u,v) = 1 - sqrt(sum(pow((tr(u,w) - tr(v,w)),2)) / len(trnsacts_btwn(u,v)))
+        sim(u,v) = 1 - sqrt(sum(pow((tr(u,w) - tr(v,w)),2)) / len(R0(u,v)))
               tr = v.trust, u.trust / R0(u, v) 
         Where R(u,v) is the amount of transactions between u and v.
         
