@@ -272,7 +272,47 @@ def threat_model_e(options):
     who're then replaced with a new similarly malicious identity once contacted
     by good peers.
     """
-    pass
+    bad_peers  = utils.generate_routers(options, minimum=1000)
+    good_peers = utils.generate_routers(options, minimum=1000)
+    
+    [setattr(r, "probably_malicious", True) for r in bad_peers]
+
+    routers = []
+    routers.extend(bad_peers)
+    routers.extend(good_peers)
+
+    [setattr(r, "routers", routers) for r in bad_peers]
+    [setattr(r, "routers", routers) for r in good_peers]
+
+    utils.introduce(bad_peers)
+    utils.introduce(good_peers)
+
+    # Set good peers up with some pre-trusted friends
+    for router in good_peers:
+        for peer in random.sample(router.peers, 2):
+            router.tbucket[peer.long_id] = peer
+
+    divisor = 1 if options.nodes == 1 else 2
+    utils.introduce(good_peers, random.sample(bad_peers, len(routers) / divisor))
+
+    utils.log("Emulating %s iterations of transactions with all peers." % \
+        "{:,}".format(options.transactions))
+    for _ in range(options.transactions):
+        for router in good_peers:
+            for peer in router.peers:
+        
+                positive_transaction = router.transact_with(peer)
+                
+                if positive_transaction == False:
+                    router.dereference(peer, and_router=True)
+                    new_router = utils.Router
+                    new_router.probably_malicious = True
+                    utils.introduce(router, new_router)
+
+    good_peers[0].tbucket.calculate_trust()
+    #[router.tbucket.calculate_trust() for router in good_peers]
+
+    return {"routers": routers}
 
 def threat_model_f(options):
     """
@@ -330,6 +370,7 @@ map = {
         "B": threat_model_b,
         "C": threat_model_c,
         "D": threat_model_d,
+        "E": threat_model_e,
         "F": threat_model_f
       }
 
