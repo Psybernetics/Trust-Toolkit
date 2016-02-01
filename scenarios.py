@@ -1,4 +1,11 @@
 # _*_ coding: utf-8 _*_
+"""
+The system depends on good peers. EigenTrust++ works optimally when it has
+pre-trusted peers to defer to.
+
+If your test case does something like render all peers unlikeable you may want
+to set your good peers up with some pre-trusted peers.
+"""
 import utils
 import random
 
@@ -54,8 +61,7 @@ def threat_model_a(options):
     utils.log("Emulating %s iterations of transactions with all peers." % \
         "{:,}".format(options.transactions))
     for _ in range(options.transactions):
-        for p in good_peer.peers:
-            good_peer.transact_with(p)
+        [good_peer.transact_with(peer) for peer in good_peer.peers]
     
         for router in routers:
             [router.transact_with(peer) for peer in router.peers]
@@ -110,7 +116,8 @@ def threat_model_b(options):
     divisor = 1 if options.nodes == 1 else 2
     utils.introduce(good_peers, random.sample(routers, len(routers) / divisor))
 
-    utils.log("Emulating %s iterations of transactions with all peers." % "{:,}".format(options.transactions))
+    utils.log("Emulating %s iterations of transactions with all peers." % \
+        "{:,}".format(options.transactions))
     for _ in range(options.transactions):
         for router in good_peers:
             for peer in router.peers:
@@ -131,7 +138,59 @@ def threat_model_c(options):
     Malicious peers try to earn high local trust from good peers by providing
     authentic services in f% of all cases.
     """
-    pass
+    class EvilRouter(utils.Router):
+        def __init__(self):
+            utils.Router.__init__(self)
+            self.probably_malicious = True
+            self.counter            = 0
+            self.f                  = 0.2    # out of 1.0.
+            self.responses          = [0, 0] # [negative, positive]
+
+        @property
+        def malicious(self):
+            self.counter += 1
+            if self.counter >= 100: self.counter = 0
+            if self.counter <= max(int(100 * self.f), 1):
+                self.responses[0] += 1
+                return True
+            self.responses[1] += 1
+            return False
+
+    bad_peers  = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    good_peers = utils.generate_routers(options, minimum=5)
+    routers = []
+    routers.extend(bad_peers)
+    routers.extend(good_peers)
+    [setattr(r, "routers", routers) for r in bad_peers]
+    [setattr(r, "routers", routers) for r in good_peers]
+
+    utils.introduce(good_peers)
+    utils.introduce(bad_peers)
+    
+    # Configure pre-trusted peers
+    for router in good_peers:
+        for peer in router.peers[:5]:
+            router.tbucket[peer.long_id] = peer
+
+    utils.introduce(good_peers, random.sample(bad_peers, options.nodes))
+
+    transactions = max(options.transactions, 100)
+
+    utils.log("Emulating %s transactions with each peer." % \
+        "{:,}".format(transactions))
+    for _ in range(transactions):
+        for router in good_peers:
+            [router.transact_with(peer) for peer in router.peers]
+        for routers in bad_peers:
+            [router.transact_with(peer) for peer in router.peers]
+
+    good_peers[0].tbucket.calculate_trust()
+
+    for router in bad_peers:
+        utils.log("%s %i negative transactions, %i positive." % \
+            (router, router.responses[0], router.responses[1]))
+    
+    return {"routers": routers}
 
 def threat_model_d(options):
     """
@@ -140,7 +199,72 @@ def threat_model_d(options):
     reputation by only providing good services and use the reputation they
     gain to boost the trust values of another group of malicious peers.
     """
-    pass
+    class AccompliceRouter(utils.Router):
+
+        def render_peers(self):
+            response = []
+            for peer in self.peers:
+                data = peer.jsonify()
+                if any(filter(lambda r: r.node == peer, self.collective)):
+                    data['trust'] = data['trust'] * 2
+                response.append(data)
+            return response
+
+    class EvilRouter(utils.Router):
+
+        def __init__(self):
+            utils.Router.__init__(self)
+            self.probably_malicious = True
+
+        def render_peers(self):
+            response = []
+            for peer in self.peers:
+                data = peer.jsonify()
+                if any(filter(lambda r: r.node == peer, self.collective)):
+                    data['trust'] = max(data['trust'], 0.5) * 2
+                response.append(data)
+            return response
+    
+    bad_peers        = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    accomplice_peers = utils.generate_routers(options, minimum=10, router_class=AccompliceRouter)
+    good_peers       = utils.generate_routers(options, minimum=20)
+
+    routers = []
+    routers.extend(bad_peers)
+    routers.extend(accomplice_peers)
+    routers.extend(good_peers)
+
+    [setattr(r, "collective", bad_peers) for r in bad_peers]
+    [setattr(r, "collective", bad_peers) for r in accomplice_peers]
+
+    [setattr(r, "routers", routers) for r in routers]
+
+    utils.introduce(good_peers)
+
+    # Set good peers up with some pre-trusted friends
+    for router in good_peers:
+        for peer in random.sample(router.peers, 2):
+            router.tbucket[peer.long_id] = peer
+
+    utils.introduce(routers)
+
+    utils.log("Emulating %s iterations of transactions with all peers." % \
+        "{:,}".format(options.transactions))
+    for _ in range(options.transactions):
+        for router in good_peers:
+            for peer in router.peers:
+                router.transact_with(peer)
+
+        # Accomplice routers work by doubling the trust trust rating of
+        # peers in the collective, which necessitates some good transactions
+        for router in routers:
+            for peer in router.peers:
+                router.transact_with(peer)
+
+    good_peers[0].tbucket.calculate_trust()
+    #[router.tbucket.calculate_trust() for router in good_peers]
+
+    return {"routers": routers}
 
 def threat_model_e(options):
     """
@@ -166,27 +290,46 @@ def threat_model_f(options):
             self.counter += 1
             return not self.counter % 100
 
-    bad_peers = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
-    utils.log(bad_peers)
-    good_peer = utils.Router()
-    good_peer.routers = bad_peers
-    [r.routers.append(good_peer) for r in bad_peers]
+    bad_peers  = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    good_peers = utils.generate_routers(options, minimum=5)
+    routers = []
+    routers.extend(bad_peers)
+    routers.extend(good_peers)
+    [setattr(r, "routers", routers) for r in bad_peers]
+    [setattr(r, "routers", routers) for r in good_peers]
 
-    utils.introduce(good_peer, random.sample(bad_peers, options.nodes))
+    utils.introduce(good_peers)
+    utils.introduce(bad_peers)
+    
+    # It's at this point that you want to set up your pre-trusted peers
+    for router in good_peers:
+        for peer in router.peers:
+            router.tbucket[peer.long_id] = peer
 
-    utils.log("Emulating %s transactions with each peer." % "{:,}".format(options.transactions))
-    for _ in range(options.transactions):
-        for p in good_peer.peers:
-            good_peer.transact_with(p)
-    good_peer.tbucket.calculate_trust()
+    utils.introduce(good_peers, random.sample(bad_peers, options.nodes))
 
-    bad_peers.insert(0, good_peer)
-    return {"routers": bad_peers}
+    # Since our EvilRouter only does its thing once every hundred transactions
+    # we're going to define a minimum transaction count of 1,000 in this case.
+    transactions = max(options.transactions, 1000)
+
+    utils.log("Emulating %s transactions with each peer." % \
+        "{:,}".format(transactions))
+    for _ in range(transactions):
+        for router in good_peers:
+            [router.transact_with(peer) for peer in router.peers]
+        for routers in bad_peers:
+            [router.transact_with(peer) for peer in router.peers]
+
+    good_peers[0].tbucket.calculate_trust()
+
+    return {"routers": routers}
 
 map = {
         "one": scenario_one,
         "A": threat_model_a,
         "B": threat_model_b,
+        "C": threat_model_c,
+        "D": threat_model_d,
         "F": threat_model_f
       }
 
