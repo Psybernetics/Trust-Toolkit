@@ -122,9 +122,11 @@ class Router(object):
         # Routers can be subclassed to turn their .malicious attr into a property
         # with statistical variance. E.g. to return True every 100th transaction.
         if not router.malicious:
-            peer.transact(positively=True)
+            transaction_type = True
         else:
-            peer.transact(positively=False)
+            transaction_type = False
+        
+        peer.transact(transaction_type)
         
         #log("[%s] %s <-- %s" % \
         #    ("+" if not maliciousness else "-", self.node, peer))
@@ -140,6 +142,26 @@ class Router(object):
             if node == router.node or node in router.peers:
                 continue
             router.peers.append(node.copy(router=router))
+
+        # NoneType indicates an unreachable peer, True indicates a positive
+        # transaction and False means the remote peer can be said to have
+        # provided a malicious resource.
+        return transaction_type
+
+    def dereference(self, peer, and_router=False):
+        """
+        Force a router to forget a peer and optionally the router it represents.
+        """
+        if peer == self.node:
+            return
+
+        self.peers.remove(peer)
+        if and_router != True:
+            return
+
+        router = filter(lambda x: x.node == peer, self.routers)
+        if not any(router): return
+        self.routers.remove(router[0])
 
     def __eq__(self, other):
         if not hasattr(other, "id"):
