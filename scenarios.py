@@ -268,12 +268,12 @@ def threat_model_d(options):
 
 def threat_model_e(options):
     """
-    Sybil attack. A thousand malicious peers who only provide bad services,
+    Sybil attack. A hundred malicious peers who only provide bad services,
     who're then replaced with a new similarly malicious identity once contacted
     by good peers.
     """
-    bad_peers  = utils.generate_routers(options, minimum=1000)
-    good_peers = utils.generate_routers(options, minimum=1000)
+    bad_peers  = utils.generate_routers(options, minimum=100)
+    good_peers = utils.generate_routers(options, minimum=100)
     
     [setattr(r, "probably_malicious", True) for r in bad_peers]
 
@@ -305,7 +305,7 @@ def threat_model_e(options):
                 
                 if positive_transaction == False:
                     router.dereference(peer, and_router=True)
-                    new_router = utils.Router
+                    new_router = utils.Router()
                     new_router.probably_malicious = True
                     utils.introduce(router, new_router)
 
