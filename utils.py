@@ -224,6 +224,17 @@ class TBucket(dict):
         self.messages   = []
         dict.__init__(self, *args, **kwargs)
     
+    def append(self, nodes):
+        if not isinstance(nodes, list):
+            nodes = [nodes]
+
+        c = len(self) + len(nodes)
+        for node in nodes:
+            if not isinstance(node, Node):
+                continue
+            node.trust += 1.0 / c
+            self[node.long_id] = node
+
     def get(self, node, endpoint=""):
         """
         Ask a remote peer about their peers.
@@ -246,7 +257,7 @@ class TBucket(dict):
         for _, m in enumerate(self):
             if _ >= self.iterations: break
             if m in self:
-                score += len(self)
+                score +=  1.0 / len(self)
             score += self.S(i, m)
         if not score:
             return 0
@@ -352,15 +363,18 @@ class TBucket(dict):
         Returns the set of the common peers between sets i and j who have
         transactions > 1, by node triple.
         """
-        i = self.get(i, self.router.network)
-        j = self.get(j, self.router.network)
+        ir = self.get(i, self.router.network)
+        jr = self.get(j, self.router.network)
         
-        if not i or not j:
+        if not ir or not jr:
             return []
 
-        i = [tuple(p['node']) for p in i if p['transactions'] > 0]
-        j = [tuple(p['node']) for p in j if p['transactions'] > 0]
-        return list(set(i).intersection(j))
+        ir = [tuple(p['node']) for p in ir if p['transactions']]
+        jr = [tuple(p['node']) for p in jr if p['transactions']]
+
+        result = list(set(ir).intersection(jr))
+        log("cmn: %s %s %i: %s" % (i, j, len(result), result))
+        return result
 
     def aggregate_trust(self):
         """

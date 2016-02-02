@@ -1,5 +1,14 @@
 #!/usr/bin/env python2
 # _*_ coding: utf-8 _*_
+"""
+The purpose of this toolkit is to stimulate refinement in an iterative
+distributed trust computation for a form of decentralised HTTP.
+
+The idea is to pre-emptively mitigate what damage could be wrought by a well
+resourced actor who fills popular overlay networks with peers who create
+references to themselves for regularly requested resources while inflating the
+malicious collectives' overall trust rating in the eyes of legitimate users.
+"""
 import sys
 import utils
 import random
