@@ -40,11 +40,15 @@ class Node(object):
         node.router  = router or self.router
         return node
 
-    def transact(self, positively=True):
+    def transact(self, positively=True, router=None):
         if positively:
             self.trust += self.epsilon
         else:
-            self.trust -= 2 * self.epsilon
+            if router and router.no_prisoners:
+                self.trust = 0
+            else:
+                self.trust -= 2 * self.epsilon
+        
         self.transactions += 1
 
     def jsonify(self):
@@ -89,6 +93,7 @@ class Router(object):
         self.id                 = hashlib.sha1(hex(id(self))).hexdigest()
         self.node               = Node(router=self)
         self.network            = "Test Network"
+        self.no_prisoners       = None
         self.peers              = []
         self.routers            = []
         self.tbucket            = TBucket(self)
@@ -132,12 +137,9 @@ class Router(object):
         
         # Routers can be subclassed to turn their .malicious attr into a property
         # with statistical variance. E.g. to return True every 100th transaction.
-        if not router.malicious:
-            transaction_type = True
-        else:
-            transaction_type = False
-        
-        peer.transact(transaction_type)
+        transaction_type = not router.malicious
+ 
+        peer.transact(positively=transaction_type, router=self)
         
         #log("[%s] %s <-- %s" % \
         #    ("+" if not maliciousness else "-", self.node, peer))
@@ -423,7 +425,8 @@ def generate_routers(options, minimum=None, router_class=Router):
 
     for _ in range(node_count):
         router = router_class()
-        router.node.colour = options.colour
+        router.node.colour  = options.colour
+        router.no_prisoners = options.no_prisoners
         routers.append(router)
 
     for router in routers:

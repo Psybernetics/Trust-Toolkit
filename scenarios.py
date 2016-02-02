@@ -9,12 +9,6 @@ to set your good peers up with some pre-trusted peers.
 import utils
 import random
 
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = 1
-except ImportError:
-    NUMPY_AVAILABLE = 0
-
 def scenario_one(options):
     """
     Pre-trusted and malicious peers with at least 10 neighbours.
