@@ -474,7 +474,6 @@ class PTPBucket(dict):
     def mean(self, ls):
         if not isinstance(ls, (list, tuple)):
             return
-        print "in mean", ls
         [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
         if not ls: return 0.00
         return sum(ls) / float(len(ls))
@@ -486,7 +485,6 @@ class PTPBucket(dict):
         [l.remove(_) for _ in l if _ > 1 or _ < 0 \
          or not isinstance(_, (int, float)) or _ is numpy.nan]
         if not len(l): return 0.00
-        print "in median", l
         a = self.mean(l)
         m = self.med(l)
         return min(max(self.mean([a, m]), 0), 1)
