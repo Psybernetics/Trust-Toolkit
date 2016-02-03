@@ -1,7 +1,6 @@
 # _*_ coding: utf-8 _*_
 import math
 import time
-import uuid
 import numpy
 import pprint
 import random
@@ -20,7 +19,7 @@ class Node(object):
             try:    id = binascii.unhexlify('%x' % id)
             except: return Node(id, ip, port, router)
         
-        self.id           = id or hashlib.sha1(str(uuid.uuid4())).digest()
+        self.id           = id or hashlib.sha1(time.asctime()).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0.50
@@ -470,13 +469,20 @@ class PTPBucket(dict):
                         return _
 
     def mean(self, ls):
+        if not isinstance(ls, (list, tuple)):
+            return
+        print "in mean", ls
+        [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
+        if not ls: return 0.00
         return sum(ls) / float(len(ls))
 
     def med(self, ls):
         return numpy.median(numpy.array(ls))
 
     def median(self, l):
-        [l.remove(_) for _ in l if _ > 1 or _ < 0]
+        [l.remove(_) for _ in l if _ > 1 or _ < 0 \
+         or not isinstance(_, (int, float)) or _ is numpy.nan]
+        print "in median", l
         a = self.mean(l)
         m = self.med(l)
         return min(max(self.mean([a, m]), 0), 1)
@@ -510,7 +516,10 @@ class PTPBucket(dict):
             
             for response in responses:
                 altruism.append(self.altruism(response))
- 
+
+            [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
+            if not len(altruism): continue
+            log("%s %s" % (peer, altruism))
             median_reported_altruism = self.median(altruism)
             log("Median reported altruism: %f" % median_reported_altruism)
             if (median_reported_altruism + self.delta) <= 1.0:
@@ -663,4 +672,3 @@ class colour:
         self.orange = ''
         self.red = ''
         self.end = ''
-
