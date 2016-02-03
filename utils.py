@@ -1,6 +1,7 @@
 # _*_ coding: utf-8 _*_
 import math
 import time
+import uuid
 import numpy
 import pprint
 import random
@@ -19,7 +20,9 @@ class Node(object):
             try:    id = binascii.unhexlify('%x' % id)
             except: return Node(id, ip, port, router)
         
-        self.id           = id or hashlib.sha1(time.asctime()).digest()
+        self.id           = id or hashlib.sha1(
+                               datetime.datetime.now().strftime("%S.%f")  
+                            ).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0.50
