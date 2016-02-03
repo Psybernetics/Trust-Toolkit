@@ -482,6 +482,7 @@ class PTPBucket(dict):
     def median(self, l):
         [l.remove(_) for _ in l if _ > 1 or _ < 0 \
          or not isinstance(_, (int, float)) or _ is numpy.nan]
+        if not len(l): return 0.00
         print "in median", l
         a = self.mean(l)
         m = self.med(l)
