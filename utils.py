@@ -1,6 +1,8 @@
 # _*_ coding: utf-8 _*_
 import math
 import time
+import uuid
+import numpy
 import pprint
 import random
 import hashlib
@@ -18,11 +20,10 @@ class Node(object):
             try:    id = binascii.unhexlify('%x' % id)
             except: return Node(id, ip, port, router)
         
-        self.id           = id or hashlib.sha1(time.asctime()).digest()
+        self.id           = id or hashlib.sha1(str(uuid.uuid4())).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0.50
-        self.colour       = False
         self.router       = router
         self.epsilon      = 0.0001
         self.long_id      = long(self.id.encode("hex"), 16)
@@ -35,7 +36,6 @@ class Node(object):
     def copy(self, router=None):
         # NOTE: Don't deepcopy(self) unless you want the attached graph..
         node         = Node(*self.threeple)
-        node.colour  = self.colour
         node.epsilon = self.epsilon
         node.router  = router or self.router
         return node
@@ -67,16 +67,6 @@ class Node(object):
         malicious = None
         if self.router:
             malicious = self.router.probably_malicious
-        if self.colour:
-            return "<Node %s%s:%5i%s %s%.4fT%s/%i>" %\
-                (colour.red if malicious else colour.green,
-                self.ip,
-                self.port,
-                colour.end, 
-                colour.orange if self.trust > 0 else colour.blue,
-                self.trust,
-                colour.end,
-                self.transactions)
         return "<%s Node %s:%5i %.4fT/%i>" %\
             ("+" if not malicious else "-",
             self.ip,
@@ -96,7 +86,7 @@ class Router(object):
         self.no_prisoners       = None
         self.peers              = []
         self.routers            = []
-        self.tbucket            = TBucket(self)
+        self.tbucket            = PTPBucket(self)
         self.probably_malicious = False
 
     @property
@@ -129,7 +119,10 @@ class Router(object):
         """
         if hex(id(peer)) == hex(id(self.node)):
             return
-        
+    
+        if not max(peer.trust, 0):
+            return None
+
         # Locate the routing table responsible for the peer we're dealing with
         router = filter(lambda x: x.node == peer, self.routers)
         if not any(router): return
@@ -191,7 +184,12 @@ class Router(object):
 
 class TBucket(dict):
     """
-    A set of pre-trusted peers.
+    A set of pre-trusted peers. The aim is to totally starve
+    errant peers of trust such that they're not selected for
+    service. It's done by asking all intermediate peers what their
+    rating of a given peer is.
+
+    High trust ratings aren't particularly meaningful, so long as it's not 0.
 
     Psuedocode translation from EigenTrust++:
 
@@ -316,20 +314,26 @@ class TBucket(dict):
         return R0
 
     def R1(self, i):
-        data    = []
-        for p in self.router:
-            data.extend(get(p, self.router.network))
-        
-        results = [p for p in data if tuple(p['node']) == i.threeple and p['transactions']]
+        """
+        The set of our peers who've had transactions with peer i.
+        """
+        results = []
+        for peer in self.router:
+            remotes_peers = self.get(peer)
+            for friend_of_a_friend in remotes_peers:
+                if friend_of_a_friend['node'] == i.threeple and friend_of_a_friend['transactions']:
+                    results.append(peer)
         log("R1:  %s %s" % (i, str(results)))
         return results
 
     def f(self, i, j):
-        s = sum([self.sim(i,j) for i in self])
+        # Feedback credibility
+        s = sum([self.sim(_, j) for _ in self.R1(i)])
+        
         if not s:
             f = 0
         else:
-            f = self.sim(i,j) / s
+            f = self.sim(i, j) / s
         log("f:   %s %s %i" % (i, j, f))
         return f
 
@@ -356,7 +360,7 @@ class TBucket(dict):
         return score
 
     def w(self, i, j):
-        w = (i.trust - self.beta) * self.C(j,k) + self.beta * self.sim(j,i)
+        w = (1.0 - self.beta) * self.C(j,k) + (self.beta * self.sim(j, i))
         log("w:   %i" % w)
         return w
 
@@ -418,6 +422,117 @@ class TBucket(dict):
     def __repr__(self):
         return "<TBucket of %i pre-trusted peers>" % len(self)
 
+class PTPBucket(dict):
+    """
+    A bucket of pre-trusted peers.
+    """
+    def __init__(self, router, *args, **kwargs):
+        # Peers trusted by pre-trusted peers. These are peers we're observing
+        # for possible inclusion into the set of pre-trusted peers.
+        self.extent = {}
+        # We require alpha satisfactory transactions and altruism(peer) = 1
+        # before we graduate a remote peer from the extended set into this set.
+        self.alpha  = 5000
+        # The minimum median trust required from at least half of the members of
+        # this set before graduating remote peers into the extended set.
+        self.beta   = 0.65
+        # Percentage of purportedly malicious downloads before a far peer can be
+        # pre-emptively dismissed for service.
+        self.delta  = 0.05
+        # Access to the routing table
+        self.router = router
+        dict.__init__(self, *args, **kwargs)
+
+    @property
+    def all(self):
+        return iter(self.copy().update(self.extent).values())
+
+    def append(self, nodes):
+        if not isinstance(nodes, list):
+            nodes = [nodes]
+
+        for node in nodes:
+            if not hasattr(node, "long_id"):
+                continue
+            self[node.long_id] = node
+        return
+
+    def get(self, node, about_node):
+        """
+        Ask a remote peer about a peer.
+        """
+        if not node:
+            return
+        for router in self.router.routers:
+            if router.node == node:
+                for _ in router.render_peers():
+                    if _['node'] == about_node.threeple:
+                        return _
+
+    def mean(self, ls):
+        return sum(ls) / float(len(ls))
+
+    def med(self, ls):
+        return numpy.median(numpy.array(ls))
+
+    def median(self, l):
+        [l.remove(_) for _ in l if _ > 1 or _ < 0]
+        a = self.mean(l)
+        m = self.med(l)
+        return min(max(self.mean([a, m]), 0), 1)
+
+    def altruism(self, i):
+        # print i, 
+        if isinstance(i, Node):
+            i = {"trust": i.trust, "transactions": i.transactions}
+        divisor = (i['transactions'] * self.router.node.epsilon)
+        # print i, divisor
+        a = i['trust'] - self.router.node.trust
+        if not divisor and not a: return 1.00
+        if not divisor: return 0.00
+        # print a
+        return a / divisor
+
+    def calculate_trust(self):
+        for peer in self.router:
+            if not peer.trust: continue
+            if (self.altruism(peer) + self.delta) <= 1.0:
+                log("Local experience has shown %s to be malicious." % peer)
+                peer.trust = 0
+                continue
+            
+            responses     = []
+            altruism      = []
+            for trusted_peer in self.values():
+                response = self.get(trusted_peer, peer)
+                if response and response['transactions']:
+                    responses.append(response)
+            
+            for response in responses:
+                altruism.append(self.altruism(response))
+ 
+            median_reported_altruism = self.median(altruism)
+            log("Median reported altruism: %f" % median_reported_altruism)
+            if (median_reported_altruism + self.delta) <= 1.0:
+                log("The consensus from our trusted peers is that %s is malicious." % peer)
+                peer.trust = 0
+                continue
+            
+        # Don't adjust a peers trust rating to more closely reflect the global
+        # consensus as this gives an innacurate reflection of their trust / transaction
+        # ratio from our perspective
+
+        for peer in self.extent.copy().values():
+            if self.altruism(peer) != 1:
+                del self.extent[peer.long_id]
+
+        for peer in self.copy().values():
+            if self.altruism(peer) != 1:
+                del self[peer.long_id]
+
+        for _ in self.router:
+            log(_)
+
 def generate_routers(options, minimum=None, router_class=Router):
     routers = []
     node_count = max(options.nodes, minimum)
@@ -425,7 +540,6 @@ def generate_routers(options, minimum=None, router_class=Router):
 
     for _ in range(node_count):
         router = router_class()
-        router.node.colour  = options.colour
         router.no_prisoners = options.no_prisoners
         routers.append(router)
 

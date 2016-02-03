@@ -13,18 +13,21 @@ def scenario_one(options):
     """
     Pre-trusted and malicious peers with at least 10 neighbours.
     Good peers with at least 2 neighbours.
+
+    Makes for an uncomplicated calculate_trust() computation.
     """
     routers      = utils.generate_routers(options, minimum=10)
-    good_routers = routers[:2]
-    bad_routers  = routers[2:]
+    good_routers = routers[:len(routers) / 2]
+    bad_routers  = routers[len(routers) / 2:]
 
     [setattr(_, "probably_malicious", True) for _ in bad_routers]
 
     utils.introduce(good_routers)
+    
     [_.tbucket.append(_.peers[:options.pre_trusted]) for _ in good_routers]
-
+    
     utils.introduce(bad_routers)
-    utils.introduce(good_routers, random.sample(bad_routers, 2))
+    utils.introduce(good_routers, bad_routers)
 
     for router in routers:    
         for peer in router:

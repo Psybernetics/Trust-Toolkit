@@ -25,10 +25,11 @@ if __name__ == "__main__":
     parser.add_option("-r", "--repl",         dest="repl", action="store_true", default=False, help="Run a ptpython shell")
     parser.add_option("-n", "--nodes",        dest="nodes", action="store", default=10, help="(default: 10)")
     parser.add_option("-p", "--pre-trusted",  dest="pre_trusted", action="store", default=2, help="(default: 2)")
-    parser.add_option("-c", "--colour",       dest="colour", action="store_true", default=False)
     parser.add_option("--describe",           dest="describe", action="store", default=None, help="Print a scenarios' documentation.")
     parser.add_option("-t", "--transactions", dest="transactions", action="store", default=10000, help="(defaults to 10,000)")
-    parser.add_option("--no-prisoners",       dest="no_prisoners", action="store_true", default=False, help="(not enabled by default)")
+
+    # --no-prisoners means any unsatisfactory transaction immediately earns the sending peer a trust rating of 0.
+    parser.add_option("--no-prisoners",       dest="no_prisoners", action="store_true", default=False, help="(disabled by default)")
     (options, args) = parser.parse_args()
 
     if options.describe:
@@ -55,12 +56,12 @@ if __name__ == "__main__":
         raise SystemExit
 
     options.transactions = int(options.transactions)
-    
-    
+
     returned_data = {}
 
     if options.scenario:
         if options.scenario in scenarios.map:
+            print options
             returned_data = scenarios.map[options.scenario](options)
             if not isinstance(returned_data, dict):
                 returned_data = {}
