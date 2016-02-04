@@ -566,8 +566,9 @@ def generate_routers(options, minimum=None, router_class=Router):
     log("Creating %s routing tables." % "{:,}".format(node_count))
 
     for _ in range(node_count):
-        router = router_class()
-        router.no_prisoners = options.no_prisoners
+        router                 = router_class()
+        router.no_prisoners    = options.no_prisoners
+        router.tbucket.verbose = options.verbose
         routers.append(router)
 
     for router in routers:

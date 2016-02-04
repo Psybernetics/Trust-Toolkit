@@ -21,7 +21,6 @@ def scenario_one(options):
     good_routers = routers[:len(routers) / 2]
     bad_routers  = routers[len(routers) / 2:]
 
-    [setattr(_.tbucket, "verbose", options.verbose) for _ in routers]
 
     [setattr(_, "probably_malicious", True) for _ in bad_routers]
 
