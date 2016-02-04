@@ -14,14 +14,14 @@ class Node(object):
     Nodes are our local representation of remote routing tables.
     A Node represents what a Router sees of another Router in the network.
     """
-    def __init__(self, id=None, ip="127.0.0.1", port=None, router=None):
+    def __init__(self, node_id=None, ip="127.0.0.1", port=None, router=None):
         
-        if isinstance(id, long):
-            try:    id = binascii.unhexlify('%x' % id)
-            except: return Node(id, ip, port, router)
-        
-        self.id           = id or hashlib.sha1(
-                               datetime.datetime.now().strftime("%S.%f")  
+        if isinstance(node_id, long):
+            try:    node_id = binascii.unhexlify('%x' % node_id)
+            except: return Node(node_id, ip, port, router)
+        self.id           = node_id or hashlib.sha1(
+                                hex(id(self)) +
+                                datetime.datetime.now().strftime("%S.%f")
                             ).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
@@ -49,7 +49,9 @@ class Node(object):
             if router and router.no_prisoners:
                 self.trust = 0
             else:
-                self.trust -= 2 * self.epsilon
+                # In a real system we will have incremented trust for the transaction
+                # in good faith and would decrement by 2 * epsilon to account for this.
+                self.trust -= self.epsilon 
         
         self.transactions += 1
 
@@ -431,18 +433,20 @@ class PTPBucket(dict):
     def __init__(self, router, *args, **kwargs):
         # Peers trusted by pre-trusted peers. These are peers we're observing
         # for possible inclusion into the set of pre-trusted peers.
-        self.extent = {}
+        self.extent  = {}
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        self.alpha  = 5000
+        self.alpha   = 5000
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta   = 0.65
+        self.beta    = 0.65
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
-        self.delta  = 0.05
-        # Access to the routing table
-        self.router = router
+        self.delta   = 0.05
+        # Access to the routing table.
+        self.router  = router
+        # Whether we're logging statistical computation.
+        self.verbose = True
         dict.__init__(self, *args, **kwargs)
 
     @property
@@ -476,10 +480,16 @@ class PTPBucket(dict):
             return
         [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
         if not ls: return 0.00
-        return sum(ls) / float(len(ls))
+        mean = sum(ls) / float(len(ls))
+        if self.verbose:
+            log("mean:   %s %f" % (ls, mean))
+        return mean
 
     def med(self, ls):
-        return numpy.median(numpy.array(ls))
+        med =  numpy.median(numpy.array(ls))
+        if self.verbose:
+            log("med:    %s %f" % (ls, med))
+        return med
 
     def median(self, l):
         [l.remove(_) for _ in l if _ > 1 or _ < 0 \
@@ -487,7 +497,13 @@ class PTPBucket(dict):
         if not len(l): return 0.00
         a = self.mean(l)
         m = self.med(l)
-        return min(max(self.mean([a, m]), 0), 1)
+        me = self.mean([a, m])
+        if self.verbose:
+            log("me:     [%f, %f] %f" % (a, m, me))
+        median = min(max(me, 0), 1)
+        if self.verbose:
+            log("median: %s %f" % (l, median))
+        return median
 
     def altruism(self, i):
         # print i, 
@@ -505,7 +521,7 @@ class PTPBucket(dict):
         for peer in self.router:
             if not peer.trust: continue
             if (self.altruism(peer) + self.delta) <= 1.0:
-                log("Local experience has shown %s to be malicious." % peer)
+                log("Local experience shows %s is malicious." % peer)
                 peer.trust = 0
                 continue
             
@@ -525,7 +541,7 @@ class PTPBucket(dict):
             median_reported_altruism = self.median(altruism)
             log("Median reported altruism: %f" % median_reported_altruism)
             if (median_reported_altruism + self.delta) <= 1.0:
-                log("The consensus from our trusted peers is that %s is malicious." % peer)
+                log("Consensus from our trusted peers is that %s is malicious." % peer)
                 peer.trust = 0
                 continue
             

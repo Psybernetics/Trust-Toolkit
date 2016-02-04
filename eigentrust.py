@@ -26,8 +26,8 @@ if __name__ == "__main__":
     parser.add_option("-n", "--nodes",        dest="nodes", action="store", default=10, help="(default: 10)")
     parser.add_option("-p", "--pre-trusted",  dest="pre_trusted", action="store", default=2, help="(default: 2)")
     parser.add_option("--describe",           dest="describe", action="store", default=None, help="Print a scenarios' documentation.")
+    parser.add_option("-v", "--verbose",      dest="verbose", action="store_true", default=False)
     parser.add_option("-t", "--transactions", dest="transactions", action="store", default=10000, help="(defaults to 10,000)")
-
     # --no-prisoners means any unsatisfactory transaction immediately earns the sending peer a trust rating of 0.
     parser.add_option("--no-prisoners",       dest="no_prisoners", action="store_true", default=False, help="(disabled by default)")
     (options, args) = parser.parse_args()

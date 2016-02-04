@@ -11,14 +11,17 @@ import random
 
 def scenario_one(options):
     """
-    Pre-trusted and malicious peers with at least 10 neighbours.
-    Good peers with at least 2 neighbours.
+    Half of the population are good peers.
+    pre-trusted peers are selected from within the set of good peers though
+    this can be made to overextend by setting |P| > (|nodes| / 2).
 
     Makes for an uncomplicated calculate_trust() computation.
     """
-    routers      = utils.generate_routers(options, minimum=10)
+    routers      = utils.generate_routers(options, minimum=4)
     good_routers = routers[:len(routers) / 2]
     bad_routers  = routers[len(routers) / 2:]
+
+    [setattr(_.tbucket, "verbose", options.verbose) for _ in routers]
 
     [setattr(_, "probably_malicious", True) for _ in bad_routers]
 
@@ -27,13 +30,27 @@ def scenario_one(options):
     [_.tbucket.append(_.peers[:options.pre_trusted]) for _ in good_routers]
     
     utils.introduce(bad_routers)
+    
+    # For the LULZ:
+    [_.tbucket.append(random.sample(_.peers, min(options.pre_trusted,len(_.peers)))) for _ in bad_routers]
+    
     utils.introduce(good_routers, bad_routers)
 
-    for router in routers:    
-        for peer in router:
-            [router.transact_with(peer) for _ in range(random.randint(0,10))]
+    utils.log("Emulating %s iterations of transactions with all peers." % \
+        "{:,}".format(options.transactions))
+    for _ in range(options.transactions):
+        for router in routers: [router.transact_with(peer) for peer in router]
 
-    good_routers[0].tbucket.calculate_trust()
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for router in routers:
+                utils.log("%s %s is sensing." % (router, router.node))
+                router.tbucket.calculate_trust()
+#        for peer in router:
+#            [router.transact_with(peer) for _ in range(random.randint(0,10))]
+
+#    good_routers[0].tbucket.calculate_trust()
 
     # The return value of a scenario is used to populate "locals" in the event
     # that you choose to use the --repl flag to spawn an interactive interpreter.
