@@ -545,9 +545,9 @@ class PTPBucket(dict):
                 peer.trust = 0
                 continue
             
-        # Don't adjust a peers trust rating to more closely reflect the global
-        # consensus as this gives an innacurate reflection of their trust / transaction
-        # ratio from our perspective
+        # Don't adjust a peers trust rating to more closely reflect the consensus
+        # as this gives an innacurate reflection of their trust / transaction ratio
+        # from our perspective
 
         for peer in self.extent.copy().values():
             if self.altruism(peer) != 1:
