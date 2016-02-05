@@ -523,21 +523,35 @@ class PTPBucket(dict):
 
     def calculate_trust(self):
         for peer in self.router:
-            if not peer.trust: continue
-            if (self.altruism(peer) + self.delta) <= 1.0:
-                log("Local experience shows %s is malicious." % peer)
-                peer.trust = 0
-                continue
             
             responses     = []
             altruism      = []
             for trusted_peer in self.values():
                 response = self.get(trusted_peer, peer)
                 if response and response['transactions']:
-                    responses.append(response)
+                    responses.append((trusted_peer, response))
             
             for response in responses:
-                altruism.append(self.altruism(response))
+                altruism.append(self.altruism(response[1]))
+
+            if not peer.trust: 
+                # Check for peers in self.all reporting transactions > 1000 and
+                # altruism == 1 which indicates trusted peers giving inflated scores.
+                for trusted_peer, response in responses:
+                    if response['transactions'] > 125 \
+                            and float("%.1f" % self.altruism(response)) == 1:
+                        trusted_peer.trust = 0
+                        if trusted_peer in self.extent.copy():
+                            log("Removing %s from EP for potentially inflating scores." % trusted_peer)
+                            del self.extent[trusted_peer.long_id]
+                        if trusted_peer in self.copy():
+                            log("Removing %s from P for potentially inflating scores." % trusted_peer)
+                continue
+
+            if (self.altruism(peer) + self.delta) <= 1.0:
+                log("Local experience shows %s is malicious." % peer)
+                peer.trust = 0
+                continue
 
             [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
             median_reported_altruism = 0.00
@@ -559,7 +573,7 @@ class PTPBucket(dict):
                 continue
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
-            votes = sum([1 for r in responses if r['trust'] >= self.beta])
+            votes = sum([1 for r in responses if r[1]['trust'] >= self.beta])
             if len(self) and not votes: continue
             if (not len(self) and peer.trust >= self.beta) \
             or (len(self) and votes >= (len(self) / 2)):
@@ -584,8 +598,8 @@ class PTPBucket(dict):
                 log("Removing %s from the set of pre-trusted peers." % peer)
                 del self[peer.long_id]
         
-        log("EP: %s" % str(self.extent.values()))
         log("P:  %s" % str(self.values()))
+        log("EP: %s" % str(self.extent.values()))
 
         for _ in self.router:
             log(_)
