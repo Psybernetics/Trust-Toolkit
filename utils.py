@@ -540,25 +540,28 @@ class PTPBucket(dict):
                 altruism.append(self.altruism(response))
 
             [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
-            if not len(altruism): continue
-            log("%s %s" % (peer, altruism))
-            median_reported_altruism = self.median(altruism)
-            log("Median reported altruism: %f" % median_reported_altruism)
-            if (median_reported_altruism + self.delta) <= 1.0:
-                log("Consensus from our trusted peers is that %s is malicious." % peer)
-                peer.trust = 0
-                continue
+            median_reported_altruism = 0.00
+            if len(altruism):
+                log("%s %s" % (peer, altruism))
+                median_reported_altruism = self.median(altruism)
+                log("Median reported altruism: %f" % median_reported_altruism)
+                if (median_reported_altruism + self.delta) <= 1.0:
+                    log("Consensus from our trusted peers is that %s is malicious." % peer)
+                    peer.trust = 0
+                    continue
             
             # Don't adjust a peers trust rating to more closely reflect the consensus
             # as this gives an innacurate reflection of their trust / transaction ratio
             # from our perspective
 
-            if float("%.1f" % median_reported_altruism) != 1.0 or peer in self.all:
+            if (len(self) and float("%.1f" % median_reported_altruism) != 1.0) \
+                or peer in self.all:
                 continue
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
             votes = sum([1 for r in responses if r['trust'] >= self.beta])
-            if len(self) and votes >= len(self) / 2:
+            if (not len(self) and peer.trust >= self.beta) \
+                or (len(self) and votes >= len(self) / 2):
                 log("votes: %s %i" % (peer, votes))
                 log("Graduating %s into EP." % peer)
                 self.extent[peer.long_id] = peer
