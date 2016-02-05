@@ -436,22 +436,26 @@ class PTPBucket(dict):
         self.extent  = {}
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        self.alpha   = 5000
+        #self.alpha   = 5000
+        self.alpha   = 5
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta    = 0.65
+        #self.beta    = 0.65
+        self.beta    = 0.5002
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
         self.delta   = 0.05
         # Access to the routing table.
         self.router  = router
-        # Whether we're logging statistical computation.
-        self.verbose = True
+        # Whether we're logging stats.
+        self.verbose = None
         dict.__init__(self, *args, **kwargs)
 
     @property
     def all(self):
-        return iter(self.copy().update(self.extent).values())
+        copy = self.copy()
+        copy.update(self.extent)
+        return iter(copy.values())
 
     def append(self, nodes):
         if not isinstance(nodes, list):
@@ -545,17 +549,38 @@ class PTPBucket(dict):
                 peer.trust = 0
                 continue
             
-        # Don't adjust a peers trust rating to more closely reflect the consensus
-        # as this gives an innacurate reflection of their trust / transaction ratio
-        # from our perspective
+            # Don't adjust a peers trust rating to more closely reflect the consensus
+            # as this gives an innacurate reflection of their trust / transaction ratio
+            # from our perspective
+
+            if float("%.1f" % median_reported_altruism) != 1.0 or peer in self.all:
+                continue
+            # If we haven't continued from this peer we'll see if they can be graduated
+            # into the extended set of pre-trusted peers using the responses obtained earlier.
+            votes = sum([1 for r in responses if r['trust'] >= self.beta])
+            if len(self) and votes >= len(self) / 2:
+                log("votes: %s %i" % (peer, votes))
+                log("Graduating %s into EP." % peer)
+                self.extent[peer.long_id] = peer
 
         for peer in self.extent.copy().values():
-            if self.altruism(peer) != 1:
+            if float("%.1f" % self.altruism(peer)) != 1.0:
+                log("Removing %s from the extended set of pre-trusted peers." % peer)
                 del self.extent[peer.long_id]
+                continue
+            # Check if they're trustworthy enough to be a pre-trusted peer
+            if peer.transactions >= self.alpha:
+                log("Graduating %s from EP to P." % peer)
+                del self.extent[peer.long_id]
+                self[peer.long_id] = peer
 
         for peer in self.copy().values():
-            if self.altruism(peer) != 1:
+            if float("%.1f" % self.altruism(peer)) != 1.0:
+                log("Removing %s from the set of pre-trusted peers." % peer)
                 del self[peer.long_id]
+        
+        log("EP: %s" % str(self.extent.values()))
+        log("P:  %s" % str(self.values()))
 
         for _ in self.router:
             log(_)

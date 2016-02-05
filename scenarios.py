@@ -45,7 +45,7 @@ def scenario_one(options):
     for _ in range(options.transactions):
         for router in routers:
             for peer in router:
-                c = random.randint(0, 5)
+                c = random.randint(0, 1)
                 if options.verbose:
                     utils.log("%s is making %i transactions with %s." % (router, c, peer))
                 [router.transact_with(peer) for i in range(c)]
@@ -53,8 +53,8 @@ def scenario_one(options):
         # Calculate trust every 5 rounds here. Normally the periodicity would be
         # a function of network size.
         if _ > 1 and not (_+1) % 5:
-            for router in routers:
-                utils.log("%s %s is sensing." % (router, router.node))
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
                 router.tbucket.calculate_trust()
 
 #    good_routers[0].tbucket.calculate_trust()
