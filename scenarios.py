@@ -78,10 +78,14 @@ def threat_model_a(options):
     utils.log("Emulating %s iterations of transactions with all peers." % \
         "{:,}".format(options.transactions))
     for _ in range(options.transactions):
-        [good_peer.transact_with(peer) for peer in good_peer.peers]
+        for peer in good_peer.peers:
+            if not random.randint(0, 1): continue
+            good_peer.transact_with(peer)
     
         for router in routers:
-            [router.transact_with(peer) for peer in router.peers]
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
 
     good_peer.tbucket.calculate_trust()
 
@@ -136,10 +140,12 @@ def threat_model_b(options):
     for _ in range(options.transactions):
         for router in good_peers:
             for peer in router.peers:
+                if not random.randint(0, 1): continue
                 router.transact_with(peer)
  
         for router in routers:
             for peer in router.peers:
+                if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
     good_peers[0].tbucket.calculate_trust()
@@ -193,9 +199,14 @@ def threat_model_c(options):
         "{:,}".format(transactions))
     for _ in range(transactions):
         for router in good_peers:
-            [router.transact_with(peer) for peer in router.peers]
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
+        
         for routers in bad_peers:
-            [router.transact_with(peer) for peer in router.peers]
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
 
     good_peers[0].tbucket.calculate_trust()
 
@@ -264,12 +275,14 @@ def threat_model_d(options):
     for _ in range(options.transactions):
         for router in good_peers:
             for peer in router.peers:
+                if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
         # Accomplice routers work by doubling the trust trust rating of
         # peers in the collective, which necessitates some good transactions
         for router in routers:
             for peer in router.peers:
+                if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
     good_peers[0].tbucket.calculate_trust()
@@ -309,7 +322,7 @@ def threat_model_e(options):
     for _ in range(options.transactions):
         for router in good_peers:
             for peer in router.peers:
-        
+                if not random.randint(0, 1): continue 
                 positive_transaction = router.transact_with(peer)
                 
                 if positive_transaction == False:
@@ -364,9 +377,13 @@ def threat_model_f(options):
         "{:,}".format(transactions))
     for _ in range(transactions):
         for router in good_peers:
-            [router.transact_with(peer) for peer in router.peers]
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
         for routers in bad_peers:
-            [router.transact_with(peer) for peer in router.peers]
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
 
     good_peers[0].tbucket.calculate_trust()
 

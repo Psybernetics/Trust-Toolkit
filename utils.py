@@ -18,7 +18,7 @@ class Node(object):
         
         if isinstance(node_id, long):
             try:    node_id = binascii.unhexlify('%x' % node_id)
-            except: return Node(node_id, ip, port, router)
+            except: return Node(node_id+2, ip, port, router)
         self.id           = node_id or hashlib.sha1(
                                 hex(id(self)) +
                                 datetime.datetime.now().strftime("%S.%f")
@@ -436,12 +436,12 @@ class PTPBucket(dict):
         self.extent  = {}
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        #self.alpha   = 5000
-        self.alpha   = 5
+        self.alpha   = 5000
+        #self.alpha   = 5
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        #self.beta    = 0.65
-        self.beta    = 0.5002
+        self.beta    = 0.65
+        # self.beta    = 0.5002
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
         self.delta   = 0.05
@@ -550,20 +550,21 @@ class PTPBucket(dict):
                     peer.trust = 0
                     continue
             
-            # Don't adjust a peers trust rating to more closely reflect the consensus
+            # Don't adjust a peers' trust rating to more closely reflect the consensus
             # as this gives an innacurate reflection of their trust / transaction ratio
             # from our perspective
 
             if (len(self) and float("%.1f" % median_reported_altruism) != 1.0) \
-                or peer in self.all:
+            or peer in self.all:
                 continue
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
             votes = sum([1 for r in responses if r['trust'] >= self.beta])
             if len(self) and not votes: continue
             if (not len(self) and peer.trust >= self.beta) \
-                or (len(self) and votes >= (len(self) / 2)):
-                log("votes: %s %i" % (peer, votes))
+            or (len(self) and votes >= (len(self) / 2)):
+                if len(self):
+                    log("votes: %s %i" % (peer, votes))
                 log("Graduating %s into EP." % peer)
                 self.extent[peer.long_id] = peer
 
