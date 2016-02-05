@@ -560,8 +560,9 @@ class PTPBucket(dict):
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
             votes = sum([1 for r in responses if r['trust'] >= self.beta])
+            if len(self) and not votes: continue
             if (not len(self) and peer.trust >= self.beta) \
-                or (len(self) and votes >= len(self) / 2):
+                or (len(self) and votes >= (len(self) / 2)):
                 log("votes: %s %i" % (peer, votes))
                 log("Graduating %s into EP." % peer)
                 self.extent[peer.long_id] = peer

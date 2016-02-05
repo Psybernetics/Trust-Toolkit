@@ -31,8 +31,8 @@ def scenario_one(options):
     utils.introduce(bad_routers)
     
     # For the LULZ:
-    [_.tbucket.append(random.sample(_.peers, min(options.pre_trusted, len(_.peers)))) \
-     for _ in bad_routers]
+#    [_.tbucket.append(random.sample(_.peers, min(options.pre_trusted, len(_.peers)))) \
+#     for _ in bad_routers]
     
     utils.introduce(good_routers, bad_routers)
 
