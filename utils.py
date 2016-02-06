@@ -21,7 +21,7 @@ class Node(object):
             except: return Node(node_id+2, ip, port, router)
         self.id           = node_id or hashlib.sha1(
                                 hex(id(self)) +
-                                datetime.datetime.now().strftime("%S.%f")
+                                datetime.datetime.now().strftime("%f")
                             ).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
