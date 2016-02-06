@@ -179,6 +179,9 @@ class Router(object):
             return False
         return self.id == other.id
 
+    def __len__(self):
+        return len(self.peers)
+
     def __iter__(self):
         return iter(self.peers)
 
@@ -525,16 +528,16 @@ class PTPBucket(dict):
     def calculate_trust(self):
         for peer in self.router:
             
-            responses     = []
-            altruism      = []
+            responses      = []
+            altruism       = []
+            local_altruism = 0.00
+            
             for trusted_peer in self.values():
                 if trusted_peer == peer: continue
                 response = self.get(trusted_peer, peer)
                 if response and response['transactions']:
                     responses.append((trusted_peer, response))
             
-            for response in responses:
-                altruism.append(self.altruism(response[1]))
 
             if not peer.trust: 
                 # Check for peers in self.all reporting transactions > 1000 and
@@ -550,15 +553,37 @@ class PTPBucket(dict):
                             log("Removing %s from P for potentially inflating scores." % trusted_peer)
                 continue
 
-            if (self.altruism(peer) + self.delta) <= 1.0:
+            local_altruism = self.altruism(peer)
+            
+            if (local_altruism + self.delta) <= 1.0:
                 log("Local experience shows %s is malicious." % peer)
                 peer.trust = 0
                 continue
 
-            [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
             median_reported_altruism = 0.00
-            if len(altruism):
+            # Let our pre-trusted peers have some say about this if they
+            # A) Represent at least 3% of who we know in the network.
+            # B) Report having more experience than us with the peer in question.
+            if float(len(self)) / len(self.router) >= 0.03:
+                
+                # Filter responses to those from peers who report having more
+                # experience than us with the peer in question if we're acribing
+                # a 100% altruism rating to the peer.
+                if peer.transactions > 1 and local_altruism >= 1.0:
+                    responses = filter(lambda r:
+                                         r[1]['transactions'] >= (peer.transactions * 1.05),
+                                         responses
+                                      )
+                     
+                for response in responses:
+                    altruism.append(self.altruism(response[1]))
+                
+                if not len(altruism): continue
+                
+                [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
+                
                 log("%s %s" % (peer, altruism))
+
                 median_reported_altruism = self.median(altruism)
                 log("Median reported altruism: %f" % median_reported_altruism)
                 if (median_reported_altruism + self.delta) <= 1.0:
@@ -568,11 +593,13 @@ class PTPBucket(dict):
             
             # Don't adjust a peers' trust rating to more closely reflect the consensus
             # as this gives an innacurate reflection of their trust / transaction ratio
-            # from our perspective
+            # from our perspective.
 
+            # Check who we can invite into the extended set.
             if (len(self) and float("%.1f" % median_reported_altruism) != 1.0) \
             or peer in self.all:
                 continue
+            
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
             votes = sum([1 for r in responses if r[1]['trust'] >= self.beta])
