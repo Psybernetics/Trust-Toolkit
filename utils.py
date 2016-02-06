@@ -117,7 +117,7 @@ class Router(object):
         """
         return [peer.jsonify() for peer in self.peers]
 
-    def transact_with(self, peer):
+    def transact_with(self, peer, transaction_type=None):
         """
         Update local trust rating and transaction count of peer
         """
@@ -134,7 +134,8 @@ class Router(object):
         
         # Routers can be subclassed to turn their .malicious attr into a property
         # with statistical variance. E.g. to return True every 100th transaction.
-        transaction_type = not router.malicious
+        if transaction_type == None:
+            transaction_type = not router.malicious
  
         peer.transact(positively=transaction_type, router=self)
         
@@ -441,7 +442,7 @@ class PTPBucket(dict):
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
         self.beta    = 0.65
-        # self.beta    = 0.5002
+        #self.beta    = 0.5002
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
         self.delta   = 0.05
@@ -527,6 +528,7 @@ class PTPBucket(dict):
             responses     = []
             altruism      = []
             for trusted_peer in self.values():
+                if trusted_peer == peer: continue
                 response = self.get(trusted_peer, peer)
                 if response and response['transactions']:
                     responses.append((trusted_peer, response))
@@ -604,11 +606,14 @@ class PTPBucket(dict):
         for _ in self.router:
             log(_)
 
-def generate_routers(options, minimum=None, router_class=Router):
+def generate_routers(options, minimum=None, maximum=None, attrs={}, router_class=Router):
     routers = []
+    
     node_count = max(options.nodes, minimum)
+    if maximum:
+        node_count = min(node_count, maximum)
+    
     log("Creating %s routing tables." % "{:,}".format(node_count))
-
     for _ in range(node_count):
         router                 = router_class()
         router.no_prisoners    = options.no_prisoners
@@ -617,6 +622,8 @@ def generate_routers(options, minimum=None, router_class=Router):
 
     for router in routers:
         router.routers = [r for r in routers if r != router]
+        for key, value in attrs.items():
+            setattr(router, key, value)
     
     return routers
 
@@ -647,6 +654,11 @@ def introduce(routers, secondary=[]):
         for router in routers:
             router.peers.extend([r.node.copy() for r in secondary if r != router])
             router.peers = list(set(router.peers))
+
+        for router in secondary:
+            router.peers.extend([r.node.copy() for r in routers if r != router])
+            router.peers = list(set(router.peers))
+
     return routers
 
 def configure(repl):
