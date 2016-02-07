@@ -449,6 +449,9 @@ class PTPBucket(dict):
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
         self.delta   = 0.05
+        # Percentage of network peers we need to trust before we start
+        # letting them cut us off from peers they report to be malicious.
+        self.gamma   = 0.04
         # Access to the routing table.
         self.router  = router
         # Whether we're logging stats.
@@ -562,9 +565,9 @@ class PTPBucket(dict):
 
             median_reported_altruism = 0.00
             # Let our pre-trusted peers have some say about this if they
-            # A) Represent at least 3% of who we know in the network.
+            # A) Represent at least 4% of who we know in the network.
             # B) Report having more experience than us with the peer in question.
-            if float(len(self)) / len(self.router) >= 0.03:
+            if float(len(self)) / len(self.router) >= self.gamma:
                 
                 # Filter responses to those from peers who report having more
                 # experience than us with the peer in question if we're acribing
