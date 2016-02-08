@@ -21,7 +21,7 @@ class Node(object):
             except: return Node(node_id+2, ip, port, router)
         self.id           = node_id or hashlib.sha1(
                                 hex(id(self)) +
-                                datetime.datetime.now().strftime("%S.%f")
+                                datetime.datetime.now().strftime("%f")
                             ).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
@@ -178,6 +178,9 @@ class Router(object):
         if not hasattr(other, "id"):
             return False
         return self.id == other.id
+
+    def __len__(self):
+        return len(self.peers)
 
     def __iter__(self):
         return iter(self.peers)
@@ -446,6 +449,12 @@ class PTPBucket(dict):
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
         self.delta   = 0.05
+        # Percentage of network peers we need to trust before we start
+        # letting them cut us off from peers they report to be malicious.
+        self.epsilon = 0.04
+        # Ratio that median aggregate altruism has to be below local altruism
+        # before we accept a far peer as malicious via trusted peers.
+        self.gamma   = 0.8
         # Access to the routing table.
         self.router  = router
         # Whether we're logging stats.
@@ -525,22 +534,22 @@ class PTPBucket(dict):
     def calculate_trust(self):
         for peer in self.router:
             
-            responses     = []
-            altruism      = []
+            responses      = []
+            altruism       = []
+            local_altruism = 0.00
+            
             for trusted_peer in self.values():
                 if trusted_peer == peer: continue
                 response = self.get(trusted_peer, peer)
                 if response and response['transactions']:
                     responses.append((trusted_peer, response))
             
-            for response in responses:
-                altruism.append(self.altruism(response[1]))
 
             if not peer.trust: 
                 # Check for peers in self.all reporting transactions > 1000 and
                 # altruism == 1 which indicates trusted peers giving inflated scores.
                 for trusted_peer, response in responses:
-                    if response['transactions'] > 125 \
+                    if response['transactions'] > peer.transactions * 0.1 \
                             and float("%.1f" % self.altruism(response)) == 1:
                         trusted_peer.trust = 0
                         if trusted_peer in self.extent.copy():
@@ -550,29 +559,59 @@ class PTPBucket(dict):
                             log("Removing %s from P for potentially inflating scores." % trusted_peer)
                 continue
 
-            if (self.altruism(peer) + self.delta) <= 1.0:
+            local_altruism = self.altruism(peer)
+            
+            if (local_altruism + self.delta) <= 1.0:
                 log("Local experience shows %s is malicious." % peer)
                 peer.trust = 0
                 continue
 
-            [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
             median_reported_altruism = 0.00
-            if len(altruism):
+            # Let our pre-trusted peers have some say about this if they
+            # A) Represent at least 4% of who we know in the network.
+            # B) Report having more experience than us with the peer in question.
+            if float(len(self)) / len(self.router) >= self.epsilon:
+                
+                # Filter responses to those from peers who report having more
+                # experience than us with the peer in question if we're acribing
+                # a 100% altruism rating to the peer.
+                if peer.transactions > 1 and local_altruism >= 1.0:
+                    responses = filter(lambda r:
+                                         r[1]['transactions'] >= (peer.transactions * 1.05),
+                                         responses
+                                      )
+                     
+                for response in responses:
+                    altruism.append(self.altruism(response[1]))
+                
+                if not len(altruism): continue
+                
+                [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
+                
                 log("%s %s" % (peer, altruism))
+
                 median_reported_altruism = self.median(altruism)
+
+                # TODO: Check for deflationary peers here
                 log("Median reported altruism: %f" % median_reported_altruism)
-                if (median_reported_altruism + self.delta) <= 1.0:
+                # Check if global altruism is below our accepted threshold (delta) and
+                # if it's reportedly less than our experience minus the accepted threshold
+                # gamma, which is made to be a function of routing table size. 
+                if ((median_reported_altruism + self.delta) <= 1.0 and local_altruism < 1.0) or \
+                        median_reported_altruism <= self.gamma:
                     log("Consensus from our trusted peers is that %s is malicious." % peer)
                     peer.trust = 0
                     continue
             
             # Don't adjust a peers' trust rating to more closely reflect the consensus
             # as this gives an innacurate reflection of their trust / transaction ratio
-            # from our perspective
+            # from our perspective.
 
+            # Check who we can invite into the extended set.
             if (len(self) and float("%.1f" % median_reported_altruism) != 1.0) \
             or peer in self.all:
                 continue
+            
             # If we haven't continued from this peer we'll see if they can be graduated
             # into the extended set of pre-trusted peers using the responses obtained earlier.
             votes = sum([1 for r in responses if r[1]['trust'] >= self.beta])
