@@ -438,29 +438,37 @@ class PTPBucket(dict):
         # Peers trusted by pre-trusted peers. These are peers we're observing
         # for possible inclusion into the set of pre-trusted peers.
         self.extent  = {}
+        
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        self.alpha   = 5000
+        self.alpha   = 15
         #self.alpha   = 5
+        
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta    = 0.65
+        self.beta    = 7
         #self.beta    = 0.5002
+        
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
-        self.delta   = 0.05
+        self.delta   = 0.05 # 5%
+        
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
-        self.epsilon = 0.04
+        self.epsilon = 0.05 # 4%
+        
         # Required difference between local transactions and remote reported
         # transactions.
         # Also the ratio that median aggregate altruism has to be under local
         # altruism before we accept a far peer as malicious via trusted peers.
         self.gamma   = 0.4
+        
         # Access to the routing table.
         self.router  = router
+        
         # Whether we're logging stats.
         self.verbose = None
+        
         dict.__init__(self, *args, **kwargs)
 
     @property
@@ -477,7 +485,6 @@ class PTPBucket(dict):
             if not hasattr(node, "long_id"):
                 continue
             self[node.long_id] = node
-        return
 
     def get(self, node, about_node):
         """
@@ -580,13 +587,13 @@ class PTPBucket(dict):
                 #
                 # Here we only listen to peers who report having gamma percent
                 # greater or equal transactions with the peer than ourselves.
-                responses = filter(lambda r:
+                filtered_responses = filter(lambda r:
                                         r[1]['transactions'] >= peer.transactions and \
                                                 (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
                                                 >= self.gamma,
                                         responses
                                   )
-                for response in responses:
+                for response in filtered_responses:
                     altruism.append(self.altruism(response[1]))
                 
                 if not len(altruism): continue
@@ -617,11 +624,19 @@ class PTPBucket(dict):
             or peer in self.all:
                 continue
             
-            # If we haven't continued from this peer we'll see if they can be graduated
-            # into the extended set of pre-trusted peers using the responses obtained earlier.
-            votes = sum([1 for r in responses if r[1]['trust'] >= self.beta])
+            # If we haven't continued from this peer we'll see if they can be
+            # graduated into the extended set of pre-trusted peers using the
+            # responses obtained earlier.
+            #
+            # We do this based on the peer having median_reported_altruism == 1
+            # and either at least half of our trusted peers having at least
+            # the minimum required transaction count (beta) with this peer or
+            # if we're in need of some pre-trusted peers, this instance having
+            # the necessary transaction count.
+            votes = sum([1 for r in responses if r[1]['transactions'] >= self.beta])
             if len(self) and not votes: continue
-            if (not len(self) and peer.trust >= self.beta) \
+            
+            if (not len(self) and peer.transactions >= self.beta) \
             or (len(self) and votes >= (len(self) / 2)):
                 if len(self):
                     log("votes: %s %i" % (peer, votes))
