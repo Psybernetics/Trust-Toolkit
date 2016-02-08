@@ -451,7 +451,10 @@ class PTPBucket(dict):
         self.delta   = 0.05
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
-        self.gamma   = 0.04
+        self.epsilon = 0.04
+        # Ratio that median aggregate altruism has to be below local altruism
+        # before we accept a far peer as malicious via trusted peers.
+        self.gamma   = 0.8
         # Access to the routing table.
         self.router  = router
         # Whether we're logging stats.
@@ -546,7 +549,7 @@ class PTPBucket(dict):
                 # Check for peers in self.all reporting transactions > 1000 and
                 # altruism == 1 which indicates trusted peers giving inflated scores.
                 for trusted_peer, response in responses:
-                    if response['transactions'] > 125 \
+                    if response['transactions'] > peer.transactions * 0.1 \
                             and float("%.1f" % self.altruism(response)) == 1:
                         trusted_peer.trust = 0
                         if trusted_peer in self.extent.copy():
@@ -567,7 +570,7 @@ class PTPBucket(dict):
             # Let our pre-trusted peers have some say about this if they
             # A) Represent at least 4% of who we know in the network.
             # B) Report having more experience than us with the peer in question.
-            if float(len(self)) / len(self.router) >= self.gamma:
+            if float(len(self)) / len(self.router) >= self.epsilon:
                 
                 # Filter responses to those from peers who report having more
                 # experience than us with the peer in question if we're acribing
@@ -588,8 +591,14 @@ class PTPBucket(dict):
                 log("%s %s" % (peer, altruism))
 
                 median_reported_altruism = self.median(altruism)
+
+                # TODO: Check for deflationary peers here
                 log("Median reported altruism: %f" % median_reported_altruism)
-                if (median_reported_altruism + self.delta) <= 1.0:
+                # Check if global altruism is below our accepted threshold (delta) and
+                # if it's reportedly less than our experience minus the accepted threshold
+                # gamma, which is made to be a function of routing table size. 
+                if ((median_reported_altruism + self.delta) <= 1.0 and local_altruism < 1.0) or \
+                        median_reported_altruism <= self.gamma:
                     log("Consensus from our trusted peers is that %s is malicious." % peer)
                     peer.trust = 0
                     continue
