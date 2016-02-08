@@ -18,7 +18,7 @@ class Node(object):
         
         if isinstance(node_id, long):
             try:    node_id = binascii.unhexlify('%x' % node_id)
-            except: return Node(node_id+2, ip, port, router)
+            except: return Node(node_id, ip, port, router)
         self.id           = node_id or hashlib.sha1(
                                 hex(id(self)) +
                                 datetime.datetime.now().strftime("%f")
@@ -452,9 +452,11 @@ class PTPBucket(dict):
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
         self.epsilon = 0.04
-        # Ratio that median aggregate altruism has to be below local altruism
-        # before we accept a far peer as malicious via trusted peers.
-        self.gamma   = 0.8
+        # Required difference between local transactions and remote reported
+        # transactions.
+        # Also the ratio that median aggregate altruism has to be under local
+        # altruism before we accept a far peer as malicious via trusted peers.
+        self.gamma   = 0.4
         # Access to the routing table.
         self.router  = router
         # Whether we're logging stats.
@@ -568,24 +570,27 @@ class PTPBucket(dict):
 
             median_reported_altruism = 0.00
             # Let our pre-trusted peers have some say about this if they
-            # A) Represent at least 4% of who we know in the network.
+            # A) Represent at least epsilon percent of who we know in the network.
             # B) Report having more experience than us with the peer in question.
             if float(len(self)) / len(self.router) >= self.epsilon:
-                
+               
                 # Filter responses to those from peers who report having more
-                # experience than us with the peer in question if we're acribing
-                # a 100% altruism rating to the peer.
-                if peer.transactions > 1 and local_altruism >= 1.0:
-                    responses = filter(lambda r:
-                                         r[1]['transactions'] >= (peer.transactions * 1.05),
-                                         responses
-                                      )
-                     
+                # experience than us with the peer in question if we're ascribing
+                # a 100% altruism rating to this peer.
+                #
+                # Here we only listen to peers who report having gamma percent
+                # greater or equal transactions with the peer than ourselves.
+                responses = filter(lambda r:
+                                        r[1]['transactions'] >= peer.transactions and \
+                                                (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
+                                                >= self.gamma,
+                                        responses
+                                  )
                 for response in responses:
                     altruism.append(self.altruism(response[1]))
                 
                 if not len(altruism): continue
-                
+
                 [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
                 
                 log("%s %s" % (peer, altruism))
