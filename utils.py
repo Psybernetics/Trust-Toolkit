@@ -444,11 +444,11 @@ class PTPBucket(dict):
         
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        self.alpha   = 30
+        self.alpha   = 5000
         
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta    = 20
+        self.beta    = 2500
         #self.beta    = 0.5002
         
         # Percentage of purportedly malicious downloads before a far peer can be
@@ -457,7 +457,7 @@ class PTPBucket(dict):
         
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
-        self.epsilon = 0.05 # 4%
+        self.epsilon = 0.04 # 4%
         
         # Access to the routing table.
         self.router  = router
@@ -561,7 +561,7 @@ class PTPBucket(dict):
                             del self[trusted_peer.long_id]
                 continue
 
-            local_altruism = self.altruism(peer)
+            local_altruism = float("%.1f" % self.altruism(peer))
             
             if (local_altruism + self.delta) <= 1.0:
                 log("Local experience shows %s is malicious." % peer)
@@ -572,43 +572,47 @@ class PTPBucket(dict):
             # Let our pre-trusted peers have some say about this if they
             # A) Represent at least epsilon percent of who we know in the network.
             # B) Report having more experience than us with the peer in question.
-            if float(len(self)) / len(self.router) >= self.epsilon and local_altruism < 1:
-               
+            if float(len(self)) / len(self.router) >= self.epsilon:
+                
                 # Filter responses to those from peers who report having more
                 # experience than us with the peer in question if we're ascribing
                 # a 100% altruism rating to this peer.
-                #
-                # Here we only listen to peers who report having 5% greater or
-                # equal transactions with the peer than ourselves.
                 filtered_responses = filter(lambda r:
                                         r[1]['transactions'] >= peer.transactions and \
                                                 (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
-                                                >= 0.05,
+                                                >= 0.01,
                                         responses
                                   )
                     
                 for response in filtered_responses:
                     altruism.append(self.altruism(response[1]))
-              
-                if not len(altruism) or (float("%.1f" % local_altruism) == 1.0 and len(altruism) == 1):
+             
+                # continue if we've had good service from the peer in question
+                # and only received one vote, or if we've had perfect service
+                # from the peer so far. Listen to trusted peers if we have no
+                # prior transactions with the peer in question as this is really
+                # what the system's about: Pre-emptively identifying
+                # untrustworthy peers without having to transact with them.
+                if not len(altruism) or (local_altruism == 1.0 and len(altruism) == 1) or \
+                        (peer.transactions and local_altruism == 1.0):
                     continue
 
+                # TODO: Check for deflationary peers here
+                
                 [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
                 
                 if self.verbose:
                     log(filtered_responses)
-                    log("%s local_altruism %.1f" % (peer, local_altruism))
+                    log("%s local_altruism %f" % (peer, local_altruism))
 
                 log("%s %s" % (peer, altruism))
-
+                
                 median_reported_altruism = self.median(altruism)
-
-                # TODO: Check for deflationary peers here
                 log("Median reported altruism: %f" % median_reported_altruism)
                 # Check if global altruism is below our accepted threshold (delta) and
                 # if it's reportedly less than our experience minus the accepted threshold
                 # gamma, which is made to be a function of routing table size. 
-                if (median_reported_altruism + self.delta) < 1:
+                if (median_reported_altruism + self.delta) < 1.0:
                     log("Consensus from our trusted peers is that %s is malicious." % peer)
                     peer.trust = 0
                     continue
