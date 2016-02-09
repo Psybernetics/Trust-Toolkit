@@ -18,17 +18,20 @@ class Node(object):
         
         if isinstance(node_id, long):
             try:    node_id = binascii.unhexlify('%x' % node_id)
-            except: return Node(node_id+2, ip, port, router)
-        self.id           = node_id or hashlib.sha1(
-                                hex(id(self)) +
-                                datetime.datetime.now().strftime("%f")
-                            ).digest()
+            except: return Node(node_id, ip, port, router)
+        self.id           = "Test Node" # Uncomment the following if you need
+                                        # realistic node IDs.
+#        self.id           = node_id or hashlib.sha1(
+#                                hex(id(self)) +
+#                                datetime.datetime.now().strftime("%f")
+#                            ).digest()
         self.ip           = ip
         self.port         = port or random.randint(0, 99999)
         self.trust        = 0.50
         self.router       = router
         self.epsilon      = 0.0001
-        self.long_id      = long(self.id.encode("hex"), 16)
+#        self.long_id      = long(self.id.encode("hex"), 16)
+        self.long_id      = self.port
         self.transactions = 0
 
     @property
@@ -438,27 +441,30 @@ class PTPBucket(dict):
         # Peers trusted by pre-trusted peers. These are peers we're observing
         # for possible inclusion into the set of pre-trusted peers.
         self.extent  = {}
+        
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
         self.alpha   = 5000
-        #self.alpha   = 5
+        
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta    = 0.65
+        self.beta    = 2500
         #self.beta    = 0.5002
+        
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
-        self.delta   = 0.05
+        self.delta   = 0.05 # 5%
+        
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
-        self.epsilon = 0.04
-        # Ratio that median aggregate altruism has to be below local altruism
-        # before we accept a far peer as malicious via trusted peers.
-        self.gamma   = 0.8
+        self.epsilon = 0.04 # 4%
+        
         # Access to the routing table.
         self.router  = router
+        
         # Whether we're logging stats.
         self.verbose = None
+        
         dict.__init__(self, *args, **kwargs)
 
     @property
@@ -475,7 +481,6 @@ class PTPBucket(dict):
             if not hasattr(node, "long_id"):
                 continue
             self[node.long_id] = node
-        return
 
     def get(self, node, about_node):
         """
@@ -544,22 +549,19 @@ class PTPBucket(dict):
                 if response and response['transactions']:
                     responses.append((trusted_peer, response))
             
-
             if not peer.trust: 
-                # Check for peers in self.all reporting transactions > 1000 and
+                # Check for peers in P reporting high transaction count and
                 # altruism == 1 which indicates trusted peers giving inflated scores.
                 for trusted_peer, response in responses:
-                    if response['transactions'] > peer.transactions * 0.1 \
+                    if response['transactions'] >= peer.transactions * 1.1 \
                             and float("%.1f" % self.altruism(response)) == 1:
                         trusted_peer.trust = 0
-                        if trusted_peer in self.extent.copy():
-                            log("Removing %s from EP for potentially inflating scores." % trusted_peer)
-                            del self.extent[trusted_peer.long_id]
                         if trusted_peer in self.copy():
                             log("Removing %s from P for potentially inflating scores." % trusted_peer)
+                            del self[trusted_peer.long_id]
                 continue
 
-            local_altruism = self.altruism(peer)
+            local_altruism = float("%.1f" % self.altruism(peer))
             
             if (local_altruism + self.delta) <= 1.0:
                 log("Local experience shows %s is malicious." % peer)
@@ -568,37 +570,49 @@ class PTPBucket(dict):
 
             median_reported_altruism = 0.00
             # Let our pre-trusted peers have some say about this if they
-            # A) Represent at least 4% of who we know in the network.
+            # A) Represent at least epsilon percent of who we know in the network.
             # B) Report having more experience than us with the peer in question.
             if float(len(self)) / len(self.router) >= self.epsilon:
                 
                 # Filter responses to those from peers who report having more
-                # experience than us with the peer in question if we're acribing
-                # a 100% altruism rating to the peer.
-                if peer.transactions > 1 and local_altruism >= 1.0:
-                    responses = filter(lambda r:
-                                         r[1]['transactions'] >= (peer.transactions * 1.05),
-                                         responses
-                                      )
-                     
-                for response in responses:
+                # experience than us with the peer in question if we're ascribing
+                # a 100% altruism rating to this peer.
+                filtered_responses = filter(lambda r:
+                                        r[1]['transactions'] >= peer.transactions and \
+                                                (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
+                                                >= 0.01,
+                                        responses
+                                  )
+                    
+                for response in filtered_responses:
                     altruism.append(self.altruism(response[1]))
-                
-                if not len(altruism): continue
+             
+                # continue if we've had good service from the peer in question
+                # and only received one vote, or if we've had perfect service
+                # from the peer so far. Listen to trusted peers if we have no
+                # prior transactions with the peer in question as this is really
+                # what the system's about: Pre-emptively identifying
+                # untrustworthy peers without having to transact with them.
+                if not len(altruism) or (local_altruism == 1.0 and len(altruism) == 1) or \
+                        (peer.transactions and local_altruism == 1.0):
+                    continue
+
+                # TODO: Check for deflationary peers here
                 
                 [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
                 
+                if self.verbose:
+                    log(filtered_responses)
+                    log("%s local_altruism %f" % (peer, local_altruism))
+
                 log("%s %s" % (peer, altruism))
-
+                
                 median_reported_altruism = self.median(altruism)
-
-                # TODO: Check for deflationary peers here
                 log("Median reported altruism: %f" % median_reported_altruism)
                 # Check if global altruism is below our accepted threshold (delta) and
                 # if it's reportedly less than our experience minus the accepted threshold
                 # gamma, which is made to be a function of routing table size. 
-                if ((median_reported_altruism + self.delta) <= 1.0 and local_altruism < 1.0) or \
-                        median_reported_altruism <= self.gamma:
+                if (median_reported_altruism + self.delta) < 1.0:
                     log("Consensus from our trusted peers is that %s is malicious." % peer)
                     peer.trust = 0
                     continue
@@ -612,11 +626,19 @@ class PTPBucket(dict):
             or peer in self.all:
                 continue
             
-            # If we haven't continued from this peer we'll see if they can be graduated
-            # into the extended set of pre-trusted peers using the responses obtained earlier.
-            votes = sum([1 for r in responses if r[1]['trust'] >= self.beta])
+            # If we haven't continued from this peer we'll see if they can be
+            # graduated into the extended set of pre-trusted peers using the
+            # responses obtained earlier.
+            #
+            # We do this based on the peer having median_reported_altruism == 1
+            # and either at least half of our trusted peers having at least
+            # the minimum required transaction count (beta) with this peer or
+            # if we're in need of some pre-trusted peers, this instance having
+            # the necessary transaction count.
+            votes = sum([1 for r in responses if r[1]['transactions'] >= self.beta])
             if len(self) and not votes: continue
-            if (not len(self) and peer.trust >= self.beta) \
+            
+            if (not len(self) and peer.transactions >= self.beta) \
             or (len(self) and votes >= (len(self) / 2)):
                 if len(self):
                     log("votes: %s %i" % (peer, votes))
@@ -642,7 +664,7 @@ class PTPBucket(dict):
         log("P:  %s" % str(self.values()))
         log("EP: %s" % str(self.extent.values()))
 
-        for _ in self.router:
+        for _ in sort_nodes_by_trust(self.router.peers):
             log(_)
 
 def generate_routers(options, minimum=None, maximum=None, attrs={}, router_class=Router):
@@ -771,6 +793,15 @@ def log(message, with_timestamp=True):
 
     for _ in message.split("\n"):
         print(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + _)
+
+def sort_nodes_by_trust(nodes):
+    if nodes == []: 
+        return []
+    else:
+        pivot   = nodes[0]
+        lesser  = sort_nodes_by_trust([x for x in nodes[1:] if x.trust < pivot.trust])
+        greater = sort_nodes_by_trust([x for x in nodes[1:] if x.trust >= pivot.trust])
+        return greater + [pivot] + lesser
 
 class colour:
     purple = '\033[95m' 
