@@ -543,8 +543,34 @@ class PTPBucket(dict):
             altruism       = []
             local_altruism = 0.00
             
+            # Screen members of set EP for inflation/deflation.
+            for extent_peer in self.extent.values():
+                if extent_peer == peer: continue
+                response = self.get(extent_peer, peer)
+                if response and response['transactions']:
+                    
+                    # Check for peers in EP reporting high transaction count and
+                    # altruism == 1 with peers we don't trust, indicating inflated scores.
+                    if not peer.trust and response['transactions'] >= peer.transactions * 1.1 \
+                    and float("%.1f" % self.altruism(response)) == 1:
+                        if extent_peer.long_id in self.extent:
+                            extent_peer.trust = 0
+                            [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
+                            log("Removing %s from EP for inflating trust ratings." % extent_peer)
+                            del self.extent[extent_peer.long_id]
+
+                    # Check for peers in EP reporting trust ratings greater or lower
+                    # than what they could be in relation to reported transaction counts.
+                    if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
+                    or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
+                    and response['trust'] and extent_peer.long_id in self.extent:
+                        extent_peer.trust = 0
+                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
+                        log("Removing %s from EP for impossible trust ratings." % extent_peer)
+                        del self.extent[extent_peer.long_id]
+ 
+
             # Ask members of set P about everyone in our routing table.
-            # TODO: Screen members of set EP for inflation/deflation.
             for trusted_peer in self.values():
                 if trusted_peer == peer: continue
                 response = self.get(trusted_peer, peer)
@@ -552,10 +578,14 @@ class PTPBucket(dict):
                     responses.append((trusted_peer, response))
             
             # Check for peers in P reporting high transaction count and
-            # altruism == 1 which indicates trusted peers giving inflated scores.
+            # altruism > 1 - delta with peers we don't trust, which indicates
+            # trusted peers giving inflated trust ratings.
+            multiplier = 2.1 if len(self.router) < 40 else 1.1
             for trusted_peer, response in responses:
-                if not peer.trust and response['transactions'] >= peer.transactions * 1.1 \
-                and float("%.1f" % self.altruism(response)) == 1:
+                if not peer.trust and response['transactions'] >= peer.transactions * multiplier \
+                and float("%.1f" % self.altruism(response)) > 1 - self.delta:
+                    if self.verbose:
+                        log((peer, trusted_peer, response))
                     if trusted_peer.long_id in self:
                         trusted_peer.trust = 0
                         [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
@@ -600,7 +630,8 @@ class PTPBucket(dict):
                 # If we have good faith in the peer regardless of having had no
                 # transactions with them we'll require the votes to come from
                 # pre-trusted peers who've rendered excellent service to
-                # mitigate the effect of any maximally deflationary peers in set P.
+                # mitigate the effect of any maximally deflationary pre-trusted
+                # peers.
                 if local_altruism >= 0.99:
                     filtered_responses = filter(lambda r: r[0].transactions > self.alpha,
                                                 filtered_responses)
@@ -730,8 +761,9 @@ def introduce(routers, secondary=[]):
             router.peers = list(set(router.peers))
     else:
         log("Introducing %s to %s." % \
-            ("a set of {:,} routing tables".format(len(routers)) if len(routers) > 1 else "1 routing table",
-                "a set of {:,} routing tables".format(len(secondary)) if len(secondary) > 1 else "1 routing table"))
+            ("a set of {:,} routing tables".format(len(routers)) if len(routers) \
+                > 1 else "1 routing table", "a set of {:,} routing tables"\
+                .format(len(secondary)) if len(secondary) > 1 else "1 routing table"))
         for router in routers:
             router.peers.extend([r.node.copy() for r in secondary if r != router])
             router.peers = list(set(router.peers))
