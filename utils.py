@@ -572,6 +572,8 @@ class PTPBucket(dict):
                     # transactions with the peer in question but not reporting the
                     # peer as having trust == 0 when reporting altruism < 0.8.
                     if self.altruism(response) <= 0.8 and response['trust'] > 0:
+                        if self.verbose:
+                            log((extent_peer, peer, response))
                         if extent_peer.long_id in self:
                             log("Removing %s from EP for deflating trust ratings." % \
                                 extent_peer)
@@ -614,6 +616,8 @@ class PTPBucket(dict):
                 # transactions with the peer in question but not reporting the
                 # peer as having trust == 0 when reporting altruism < 0.8.
                 if self.altruism(response) <= 0.8 and response['trust'] > 0:
+                    if self.verbose:
+                        log((trusted_peer, peer, response))
                     if trusted_peer.long_id in self:
                         log("Removing %s from P for deflating trust ratings." % \
                             trusted_peer)
