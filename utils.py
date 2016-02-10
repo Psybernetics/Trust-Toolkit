@@ -543,7 +543,7 @@ class PTPBucket(dict):
             altruism       = []
             local_altruism = 0.00
 
-            # Multipler is the amount of transactions more than ourselves we're
+            # Multiplier is the amount of transactions more than ourselves we're
             # checking a trusted peer is reporting they've satisfactorily had
             # with an untrustworthy peer. For small networks we would find it
             # interesting if a peer we depend on for consensus claims to have
@@ -559,9 +559,9 @@ class PTPBucket(dict):
                 if response and response['transactions']:
                     
                     # Check for peers in EP reporting high transaction count and
-                    # altruism == 1 with peers we don't trust, indicating inflated scores.
+                    # high trust with peers we don't trust, indicating inflated scores.
                     if not peer.trust and response['transactions'] >= peer.transactions * multiplier \
-                    and float("%.1f" % self.altruism(response)) == 1:
+                    and float("%.1f" % self.altruism(response)) >= 1 - self.delta:
                         if extent_peer.long_id in self.extent:
                             extent_peer.trust = 0
                             [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
