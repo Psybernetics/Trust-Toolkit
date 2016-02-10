@@ -573,7 +573,7 @@ class PTPBucket(dict):
                     # peer as having trust == 0 when reporting altruism < 0.8.
                     if self.altruism(response) <= 0.8 and response['trust'] > 0:
                         if extent_peer.long_id in self:
-                            log("Removing %s from P for deflating trust ratings." % \
+                            log("Removing %s from EP for deflating trust ratings." % \
                                 extent_peer)
                             del self.extent[extent_peer.long_id]
 
