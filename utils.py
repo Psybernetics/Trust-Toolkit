@@ -566,7 +566,7 @@ class PTPBucket(dict):
                 # than what they could be in relation to reported transaction counts.
                 if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
                 or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
-                and trusted_peer.long_id in self:
+                and response['trust'] and trusted_peer.long_id in self:
                     trusted_peer.trust = 0
                     [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
                     log("Removing %s from P for impossible trust ratings." % trusted_peer)
