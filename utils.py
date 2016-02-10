@@ -444,11 +444,11 @@ class PTPBucket(dict):
         
         # We require alpha satisfactory transactions and altruism(peer) = 1
         # before we graduate a remote peer from the extended set into this set.
-        self.alpha   = 50
+        self.alpha   = 500
         
         # The minimum median trust required from at least half of the members of
         # this set before graduating remote peers into the extended set.
-        self.beta    = 25
+        self.beta    = 250
         #self.beta    = 0.5002
         
         # Percentage of purportedly malicious downloads before a far peer can be
@@ -596,10 +596,19 @@ class PTPBucket(dict):
                                                 >= 0.01,
                                         responses
                                   )
-                    
+
+                # If we have good faith in the peer regardless of having had no
+                # transactions with them we'll require the votes to come from
+                # pre-trusted peers who've rendered excellent service to
+                # mitigate the effect of any maximally deflationary peers in set P.
+                if local_altruism >= 0.99:
+                    filtered_responses = filter(lambda r: r[0].transactions > self.alpha,
+                                                filtered_responses)
+
+
                 for response in filtered_responses:
                     altruism.append(self.altruism(response[1]))
-             
+
                 # continue if we've had good service from the peer in question
                 # and only received one vote, or if we've had perfect service
                 # from the peer so far. Listen to trusted peers if we have no
@@ -609,8 +618,6 @@ class PTPBucket(dict):
                 if not len(altruism) or (local_altruism == 1.0 and len(altruism) == 1) or \
                         (peer.transactions and local_altruism == 1.0):
                     continue
-
-                # TODO: Check for deflationary peers here
                 
                 [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
                 
