@@ -98,7 +98,7 @@ def scenario_two(options):
             for peer in router:
                 if not random.randint(0, 1): continue
                 if not router.probably_malicious and not peer.router.probably_malicious:
-                    if random.randint(0, 250) == 1:
+                    if peer.trust and random.randint(0, 250) == 1:
                         utils.log("Good peer %s is having a bad transaction with good peer %s." % \
                             (router.node, peer))
                         router.transact_with(peer, transaction_type=False)

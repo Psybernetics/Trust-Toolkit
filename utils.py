@@ -453,7 +453,7 @@ class PTPBucket(dict):
         
         # Percentage of purportedly malicious downloads before a far peer can be
         # pre-emptively dismissed for service.
-        self.delta   = 0.05 # 5%
+        self.delta   = 0.13 # 13%
         
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
