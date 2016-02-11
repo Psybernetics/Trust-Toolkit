@@ -562,7 +562,9 @@ class PTPBucket(dict):
                     # high trust with peers we don't trust, indicating inflated scores.
                     if not peer.trust and peer.transactions > 5 * multiplier \
                         and response['transactions'] >= peer.transactions * multiplier \
-                        and float("%.1f" % self.altruism(response)) >= 1 - self.delta:
+                        and float("%.1f" % self.altruism(response)) >= 1.0:
+                        if self.verbose:
+                            log((peer, extent_peer, response))
                         if extent_peer.long_id in self.extent:
                             extent_peer.trust = 0
                             [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
@@ -604,15 +606,15 @@ class PTPBucket(dict):
             for trusted_peer, response in responses:
                 if not peer.trust and peer.transactions > 5 * multiplier \
                     and response['transactions'] >= peer.transactions * multiplier \
-                    and float("%.1f" % self.altruism(response)) > 1 - self.delta:
+                    and float("%.1f" % self.altruism(response)) >= 1.0:
                     if self.verbose:
                         log((peer, trusted_peer, response))
                     if trusted_peer.long_id in self:
-                        trusted_peer.trust -= self.router.node.epsilon
-#                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
-                        log("Decrementing trust for %s for inflating trust ratings." % \
+                        trusted_peer.trust = 0
+                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
+                        log("Removing %s from P for inflating trust ratings." % \
                             trusted_peer)
-#                        del self[trusted_peer.long_id]
+                        del self[trusted_peer.long_id]
 
                 # Check for members of set P reporting 100% unsatisfactory
                 # transactions with the peer in question but not reporting the
