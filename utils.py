@@ -435,7 +435,34 @@ class TBucket(dict):
 
 class PTPBucket(dict):
     """
-    A bucket of pre-trusted peers.
+    A two-tiered bucket of pre-trusted peers.
+
+    The extended set cannot contain members of the real set and the real set
+    mustn't contain members of the extended set. The members of the set of
+    pre-trusted peers, referred to as P, are queried about every peer we know
+    of except for themselves providing the cardinality of P is greater than a
+    pre set percentage of the size of the network, with a frequency that's also
+    tied to the size of the network as we see it. The larger the network the
+    less often you should perform calculate_trust().
+    
+    The responses about peers are first checked for trust rating inflation,
+    deflation and whether they're just impossible in relation to their reported
+    transaction count.
+
+    For each peer we then calculate the median altruism rating of all obtained
+    responses, which is the number of transactions divided by the trust rating
+    once normalised to its defaults (IE. trust - 0.5 / transactions * epsilon).
+
+    For peers who have a median altruism rating below 1.00 minus our cutoff
+    point, say 5%, we say that a consensus has been acheived via set P that
+    the peer in question is malicious. This enables use to identify nodes
+    we should distrust without having to transact with them at all.
+
+    Members of the extended set, referred to as EP, are being monitored for
+    retaining an altruism score of 1.00 (100% ratio of trust to transactions)
+    and can be graduated into set P once they have rendered reliable service
+    to at least either half of our set of pre-trusted peers or if none are
+    available, directly to ourselves.
     """
     def __init__(self, router, *args, **kwargs):
         # Peers trusted by pre-trusted peers. These are peers we're observing
@@ -446,18 +473,18 @@ class PTPBucket(dict):
         # before we graduate a remote peer from the extended set into this set.
         self.alpha   = 500
         
-        # The minimum median trust required from at least half of the members of
-        # this set before graduating remote peers into the extended set.
+        # The minimum satisfactory transactions required with at least half of
+        # the members of this set, or if there are no members of this set, with
+        # ourselves before graduating remote peers into the extended set.
         self.beta    = 250
-        #self.beta    = 0.5002
         
         # Percentage of purportedly malicious downloads before a far peer can be
-        # pre-emptively dismissed for service.
-        self.delta   = 0.13 # 13%
+        # pre-emptively dismissed for service. 13% by default.
+        self.delta   = 0.13
         
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
-        self.epsilon = 0.04 # 4%
+        self.gamma = 0.04
         
         # Access to the routing table.
         self.router  = router
@@ -650,9 +677,9 @@ class PTPBucket(dict):
 
             median_reported_altruism = 0.00
             # Let our pre-trusted peers have some say about this if they
-            # A) Represent at least epsilon percent of who we know in the network.
+            # A) Represent at least gamma percent of who we know in the network.
             # B) Report having more experience than us with the peer in question.
-            if float(len(self)) / len(self.router) >= self.epsilon:
+            if float(len(self)) / len(self.router) >= self.gamma:
                 
                 # Filter responses to those from peers who report having more
                 # experience than us with the peer in question if we're ascribing
