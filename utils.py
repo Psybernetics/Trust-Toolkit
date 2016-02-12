@@ -796,11 +796,11 @@ class PTPBucket(dict):
                     if not cmp_peer in self.values() or cmp_peer == trusted_peer:
                         continue
                     for _peer, cmp_response in cmp_responses:
-                        if _peer == peer and self.altruism(cmp_response) > 0.7:
+                        if _peer == peer and self.altruism(cmp_response) > 0.95:
                             x += 1
             if self.verbose:
                 log("%s x: %i" % (trusted_peer, x))
-            if x > len(self.router) * 0.95:
+            if x > len(self.router) * 0.7:
                 log("Removing %s from P for deflating trust ratings." % trusted_peer)
                 del self[trusted_peer.long_id]
 
