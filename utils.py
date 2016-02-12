@@ -692,8 +692,8 @@ class PTPBucket(dict):
                 # a 100% altruism rating to this peer.
                 filtered_responses = filter(lambda r:
                                         r[1]['transactions'] >= peer.transactions and \
-                                                (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
-                                                >= 0.01,
+                                        (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
+                                        >= 0.01,
                                         responses
                                   )
 
@@ -800,7 +800,7 @@ class PTPBucket(dict):
                             x += 1
             if self.verbose:
                 log("%s x: %i" % (trusted_peer, x))
-            if x > len(self.router) * 0.95:
+            if x > len(self.router) * 0.7:
                 log("Removing %s from P for deflating trust ratings." % trusted_peer)
                 del self[trusted_peer.long_id]
 
