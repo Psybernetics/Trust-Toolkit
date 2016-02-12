@@ -692,8 +692,8 @@ class PTPBucket(dict):
                 # a 100% altruism rating to this peer.
                 filtered_responses = filter(lambda r:
                                         r[1]['transactions'] >= peer.transactions and \
-                                                (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
-                                                >= 0.01,
+                                        (float(r[1]['transactions'] - peer.transactions) / r[1]['transactions']) \
+                                        >= 0.01,
                                         responses
                                   )
 
@@ -796,7 +796,7 @@ class PTPBucket(dict):
                     if not cmp_peer in self.values() or cmp_peer == trusted_peer:
                         continue
                     for _peer, cmp_response in cmp_responses:
-                        if _peer == peer and self.altruism(cmp_response) > 0.95:
+                        if _peer == peer and self.altruism(cmp_response) > 0.7:
                             x += 1
             if self.verbose:
                 log("%s x: %i" % (trusted_peer, x))
