@@ -479,8 +479,10 @@ class PTPBucket(dict):
         self.beta    = 250
         
         # Percentage of purportedly malicious downloads before a far peer can be
-        # pre-emptively dismissed for service. 13% by default.
-        self.delta   = 0.13
+        # pre-emptively dismissed for service. 0.5% by default. This means that
+        # we'll tolerate one unsatisfactory download out of every 200 per
+        # threat model F.
+        self.delta   = 0.005
         
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
@@ -564,6 +566,8 @@ class PTPBucket(dict):
         return a / divisor
 
     def calculate_trust(self):
+        # Any superficially simple behaviors here can be enhanced with
+        # decision trees.
         all_responses = {} 
 
         for peer in self.router:
@@ -620,7 +624,6 @@ class PTPBucket(dict):
                         log("Removing %s from EP for impossible trust ratings." % extent_peer)
                         del self.extent[extent_peer.long_id]
  
-
             # Ask members of set P about everyone in our routing table.
             for trusted_peer in self.values():
                 if trusted_peer == peer: continue
