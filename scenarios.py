@@ -98,7 +98,7 @@ def scenario_two(options):
             for peer in router:
                 if not random.randint(0, 1): continue
                 if not router.probably_malicious and not peer.router.probably_malicious:
-                    if random.randint(0, 250) == 1:
+                    if peer.trust and random.randint(0, 250) == 1:
                         utils.log("Good peer %s is having a bad transaction with good peer %s." % \
                             (router.node, peer))
                         router.transact_with(peer, transaction_type=False)
@@ -125,8 +125,10 @@ def scenario_two(options):
             [setattr(r, "routers", routers) for r in new_good_routers]
             [setattr(r, "routers", routers) for r in new_bad_routers]
 
-            utils.introduce(new_good_routers, random.sample(good_routers, random.choice(range(2, 6))))
-            utils.introduce(new_bad_routers,  random.sample(good_routers, random.choice(range(2, 6))))
+            utils.introduce(new_good_routers, random.sample(good_routers,
+                random.choice(range(2, len(good_routers)))))
+            utils.introduce(new_bad_routers,  random.sample(good_routers,
+                random.choice(range(2, len(good_routers)))))
             
             for r in new_good_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -154,7 +156,8 @@ def scenario_three(options):
                 response = []
                 for peer in self.peers:
                     data = peer.jsonify()
-                    data['trust'] = 0.5 - (data['transactions'] * self.node.epsilon)
+                    low  = 0.5 - (data['transactions'] * self.node.epsilon)
+                    data['trust'] = random.choice([low, 0])
                     response.append(data)
                 return response
 
