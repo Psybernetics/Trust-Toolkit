@@ -564,11 +564,12 @@ class PTPBucket(dict):
         return a / divisor
 
     def calculate_trust(self):
+        all_responses = {} 
+
         for peer in self.router:
-            
-            responses      = []
-            altruism       = []
-            local_altruism = 0.00
+            responses             = []
+            altruism              = []
+            local_altruism        = 0.00
 
             # Multiplier is the amount of transactions more than ourselves we're
             # checking a trusted peer is reporting they've satisfactorily had
@@ -626,7 +627,12 @@ class PTPBucket(dict):
                 response = self.get(trusted_peer, peer)
                 if response and response['transactions']:
                     responses.append((trusted_peer, response))
-            
+                    
+                    if not trusted_peer in all_responses:
+                        all_responses[trusted_peer] = [(peer, response)]
+                    else:
+                        all_responses[trusted_peer].append((peer, response))
+
             # Check for peers in P reporting high transaction count and
             # altruism > 1 - delta with peers we don't trust, which indicates
             # trusted peers giving inflated trust ratings.
@@ -775,11 +781,36 @@ class PTPBucket(dict):
                 log("Removing %s from the set of pre-trusted peers." % peer)
                 del self[peer.long_id]
         
+        # Check the percentage of high transaction/altruism peers being
+        # reported as untrustworthy by this peer.
+        for trusted_peer, responses in all_responses.items():
+            if not trusted_peer.long_id in self: continue
+            x = 0
+            for peer, response in responses:
+                if not trusted_peer.long_id in self: break
+                if response['transactions'] < peer.transactions \
+                or peer.transactions < 20: continue
+                if self.altruism(peer) > 0.95 and self.altruism(response) <= 0:
+                    x += 1
+                for cmp_peer, cmp_responses in all_responses.items():
+                    if not cmp_peer in self.values() or cmp_peer == trusted_peer:
+                        continue
+                    for _peer, cmp_response in cmp_responses:
+                        if _peer == peer and self.altruism(cmp_response) > 0.95:
+                            x += 1
+            if self.verbose:
+                log("%s x: %i" % (trusted_peer, x))
+            if x > len(self.router) * 0.95:
+                log("Removing %s from P for deflating trust ratings." % trusted_peer)
+                del self[trusted_peer.long_id]
+
         log("P:  %s" % str(self.values()))
         log("EP: %s" % str(self.extent.values()))
 
         for _ in sort_nodes_by_trust(self.router.peers):
             log(_)
+
+        del all_responses
 
 def generate_routers(options, minimum=None, maximum=None, attrs={}, router_class=Router):
     routers = []

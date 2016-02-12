@@ -125,8 +125,10 @@ def scenario_two(options):
             [setattr(r, "routers", routers) for r in new_good_routers]
             [setattr(r, "routers", routers) for r in new_bad_routers]
 
-            utils.introduce(new_good_routers, random.sample(good_routers, random.choice(range(2, 6))))
-            utils.introduce(new_bad_routers,  random.sample(good_routers, random.choice(range(2, 6))))
+            utils.introduce(new_good_routers, random.sample(good_routers,
+                random.choice(range(2, len(good_routers)))))
+            utils.introduce(new_bad_routers,  random.sample(good_routers,
+                random.choice(range(2, len(good_routers)))))
             
             for r in new_good_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -154,7 +156,8 @@ def scenario_three(options):
                 response = []
                 for peer in self.peers:
                     data = peer.jsonify()
-                    data['trust'] = 0.5 - (data['transactions'] * self.node.epsilon)
+                    low  = 0.5 - (data['transactions'] * self.node.epsilon)
+                    data['trust'] = random.choice([low, 0])
                     response.append(data)
                 return response
 
