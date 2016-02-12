@@ -224,6 +224,57 @@ def scenario_three(options):
 
     return {"routers": routers}
 
+def scenario_four(options):
+    """
+    There are no malicious peers.
+    A mix of new peers are introduced every 1/5th of the iteration count.
+    Peers have a 1 in 250 chance of receiving negative feedback from eachother.
+    """
+    routers = utils.generate_routers(options, minimum=4)
+
+    utils.introduce(routers)
+    
+    [_.tbucket.append(_.peers[:options.pre_trusted]) for _ in routers]
+
+    # Note that this is based on a definite transaction count but it's through a
+    # random transaction count with the possibility of some peers not transacting
+    # with some of their peers at all that the distributed trust algorithm can be
+    # used to detect malicious peers via the set of pre-trusted peers alone.
+    utils.log("Emulating %s iterations of transactions with all peers." % \
+        "{:,}".format(options.transactions))
+    for _ in range(options.transactions):
+        for router in routers:
+            for peer in router:
+                if not random.randint(0, 1): continue
+                if not router.probably_malicious and not peer.router.probably_malicious:
+                    if peer.trust and random.randint(0, 250) == 1:
+                        utils.log("Peer %s is having a bad transaction with %s." % \
+                            (router.node, peer))
+                        router.transact_with(peer, transaction_type=False)
+                        continue
+                router.transact_with(peer)
+
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
+
+        # Introduce a mix of new peers every 1/5th of the iteration count
+        if _ > 5 and not _ % (options.transactions / 5):
+            new_routers = utils.generate_routers(options, maximum=random.randint(1, 3))
+            
+            routers.extend(new_routers)
+            
+            [setattr(r, "routers", routers) for r in new_routers]
+
+            utils.introduce(new_routers, random.sample(routers, random.choice(range(2, len(routers)))))
+            
+            for r in new_routers:
+                utils.log("Introduced %s %s into the system." % (r, r.node))
+
+    return {"routers": routers}
 
 def threat_model_a(options):
     """
@@ -552,9 +603,10 @@ def threat_model_f(options):
     return {"routers": routers}
 
 map = {
-        "one": scenario_one,
-        "two": scenario_two,
+        "one":   scenario_one,
+        "two":   scenario_two,
         "three": scenario_three,
+        "four":  scenario_four,
         "A": threat_model_a,
         "B": threat_model_b,
         "C": threat_model_c,
