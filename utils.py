@@ -2,12 +2,16 @@
 import math
 import time
 import uuid
-import numpy
 import pprint
 import random
 import hashlib
 import binascii
 import datetime
+
+try:
+    import numpy
+except ImportError:
+    numpy = None
 
 class Node(object):
     """
@@ -526,7 +530,10 @@ class PTPBucket(dict):
     def mean(self, ls):
         if not isinstance(ls, (list, tuple)):
             return
-        [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
+        if numpy:
+            [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
+        else:
+            [ls.remove(_) for _ in ls if _ == None]
         if not ls: return 0.00
         mean = sum(ls) / float(len(ls))
         if self.verbose:
@@ -534,14 +541,21 @@ class PTPBucket(dict):
         return mean
 
     def med(self, ls):
-        med =  numpy.median(numpy.array(ls))
+        if not numpy:
+            med = median(ls)
+        else:
+            med =  numpy.median(numpy.array(ls))
         if self.verbose:
             log("med:    %s %f" % (ls, med))
         return med
 
     def median(self, l):
-        [l.remove(_) for _ in l if _ > 1 or _ < 0 \
-         or not isinstance(_, (int, float)) or _ is numpy.nan]
+        if numpy:
+            [l.remove(_) for _ in l if _ > 1 or _ < 0 \
+             or not isinstance(_, (int, float)) or _ is numpy.nan]
+        else:
+            [l.remove(_) for _ in l if _ > 1 or _ < 0 \
+             or not isinstance(_, (int, float))]
         if not len(l): return 0.00
         a = self.mean(l)
         m = self.med(l)
@@ -722,7 +736,10 @@ class PTPBucket(dict):
                         (peer.transactions and local_altruism == 1.0):
                     continue
                 
-                [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
+                if numpy:
+                    [altruism.remove(_) for _ in altruism if _ == None or _ is numpy.nan]
+                else:
+                    [altruism.remove(_) for _ in altruism if _ == None]
                 
                 if self.verbose:
                     log(filtered_responses)
@@ -952,6 +969,14 @@ def sort_nodes_by_trust(nodes):
         greater = sort_nodes_by_trust([x for x in nodes[1:] if x.trust >= pivot.trust])
         return greater + [pivot] + lesser
 
+def median(ls):
+    ls = sorted(ls)
+    if len(ls) < 1:
+            return None
+    if len(ls) %2 == 1:
+            return ls[((len(ls)+1)/2)-1]
+    else:
+            return float(sum(ls[(len(ls)/2)-1:(len(ls)/2)+1]))/2.0
 class colour:
     purple = '\033[95m' 
     blue = '\033[94m'
