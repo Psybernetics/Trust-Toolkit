@@ -121,9 +121,7 @@ def scenario_two(options):
             
             routers.extend(new_good_routers)
             routers.extend(new_bad_routers)
-            
-            [setattr(r, "routers", routers) for r in new_good_routers]
-            [setattr(r, "routers", routers) for r in new_bad_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
             utils.introduce(new_good_routers, random.sample(good_routers,
                 random.choice(range(2, len(good_routers)))))
@@ -211,8 +209,7 @@ def scenario_three(options):
             routers.extend(new_good_routers)
             routers.extend(new_bad_routers)
             
-            [setattr(r, "routers", routers) for r in new_good_routers]
-            [setattr(r, "routers", routers) for r in new_bad_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
             utils.introduce(new_good_routers, random.sample(good_routers, random.choice(range(2, 6))))
             utils.introduce(new_bad_routers,  random.sample(good_routers, random.choice(range(2, 6))))
@@ -266,8 +263,7 @@ def scenario_four(options):
             new_routers = utils.generate_routers(options, maximum=random.randint(1, 3))
             
             routers.extend(new_routers)
-            
-            [setattr(r, "routers", routers) for r in new_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
             utils.introduce(new_routers, random.sample(routers, random.choice(range(2, len(routers)))))
             
