@@ -676,6 +676,7 @@ class PTPBucket(dict):
                     [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
                     log("Removing %s from P for impossible trust ratings." % trusted_peer)
                     del self[trusted_peer.long_id]
+                    del all_responses[trusted_peer]
                     responses.remove((trusted_peer, response))
                     continue
 
@@ -691,6 +692,7 @@ class PTPBucket(dict):
                         log("Removing %s from P for deflating trust ratings." % \
                             trusted_peer)
                         del self[trusted_peer.long_id]
+                        del all_responses[trusted_peer]
                         responses.remove((trusted_peer, response))
                         continue
 
@@ -717,6 +719,7 @@ class PTPBucket(dict):
                         log("Removing %s from P for inflating trust ratings." % \
                             trusted_peer)
                         del self[trusted_peer.long_id]
+                        del all_responses[trusted_peer]
                         responses.remove((trusted_peer, response))
 
             if not peer.trust: continue
