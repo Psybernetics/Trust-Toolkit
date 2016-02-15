@@ -458,7 +458,7 @@ class PTPBucket(dict):
     once normalised to its defaults (IE. trust - 0.5 / transactions * epsilon).
 
     For peers who have a median altruism rating below 1.00 minus our cutoff
-    point, say 5%, we say that a consensus has been acheived via set P that
+    point, say 0.5%, we say that a consensus has been acheived via set P that
     the peer in question is malicious. This enables use to identify nodes
     we should distrust without having to transact with them at all.
 
@@ -527,19 +527,6 @@ class PTPBucket(dict):
                     if _['node'] == about_node.threeple:
                         return _
 
-    def mean(self, ls):
-        if not isinstance(ls, (list, tuple)):
-            return
-        if numpy:
-            [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
-        else:
-            [ls.remove(_) for _ in ls if _ == None]
-        if not ls: return 0.00
-        mean = sum(ls) / float(len(ls))
-        if self.verbose:
-            log("mean:   %s %f" % (ls, mean))
-        return mean
-
     def med(self, ls):
         if not numpy:
             med = median(ls)
@@ -557,9 +544,9 @@ class PTPBucket(dict):
             [l.remove(_) for _ in l if _ > 1 or _ < 0 \
              or not isinstance(_, (int, float))]
         if not len(l): return 0.00
-        a = self.mean(l)
-        m = self.med(l)
-        me = self.mean([a, m])
+        a = mean(l)
+        m = median(l)
+        me = mean([a, m])
         if self.verbose:
             log("me:     [%f, %f] %f" % (a, m, me))
         median = min(max(me, 0), 1)
@@ -1002,14 +989,29 @@ def sort_nodes_by_trust(nodes):
         greater = sort_nodes_by_trust([x for x in nodes[1:] if x.trust >= pivot.trust])
         return greater + [pivot] + lesser
 
+def mean(self, ls):
+    if not isinstance(ls, (list, tuple)):
+        return
+    if numpy:
+        [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
+    else:
+        [ls.remove(_) for _ in ls if _ == None]
+    if not ls: return 0.00
+    mean = sum(ls) / float(len(ls))
+    if self.verbose:
+        log("mean:   %s %f" % (ls, mean))
+    return mean
+
 def median(ls):
+    if numpy:
+        return numpy.median(numpy.array(ls))
     ls = sorted(ls)
     if len(ls) < 1:
-            return None
+        return None
     if len(ls) %2 == 1:
-            return ls[((len(ls)+1)/2)-1]
+        return ls[((len(ls)+1)/2)-1]
     else:
-            return float(sum(ls[(len(ls)/2)-1:(len(ls)/2)+1]))/2.0
+        return float(sum(ls[(len(ls)/2)-1:(len(ls)/2)+1]))/2.0
 class colour:
     purple = '\033[95m' 
     blue = '\033[94m'

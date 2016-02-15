@@ -123,10 +123,10 @@ def scenario_two(options):
             routers.extend(new_bad_routers)
             [setattr(r, "routers", routers) for r in routers]
 
-            utils.introduce(new_good_routers, random.sample(good_routers,
-                random.choice(range(2, len(good_routers)))))
-            utils.introduce(new_bad_routers,  random.sample(good_routers,
-                random.choice(range(2, len(good_routers)))))
+            utils.introduce(new_good_routers, random.sample(routers,
+                random.choice(range(2, len(routers)))))
+            utils.introduce(new_bad_routers,  random.sample(routers,
+                random.choice(range(2, len(routers)))))
             
             for r in new_good_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -318,7 +318,7 @@ def threat_model_b(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = data['trust'] * 2
+                    data['trust'] = peer.transactions * self.node.epsilon
                 response.append(data)
             return response
     
@@ -439,7 +439,8 @@ def threat_model_d(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = data['trust'] * 2
+                    data['trust'] = 0.5 + (peer.transactions * \
+                        self.node.epsilon)
                 response.append(data)
             return response
 
@@ -454,7 +455,8 @@ def threat_model_d(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = max(data['trust'], 0.5) * 2
+                    data['trust'] = max(0.5 + (peer.transactions * \
+                        self.node.epsilon), 0.5)
                 response.append(data)
             return response
     
