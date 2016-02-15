@@ -580,12 +580,12 @@ class PTPBucket(dict):
         return a / divisor
 
     def calculate_trust(self):
-        # Any superficially simple behaviors here can be enhanced with
-        # decision trees.
+        # Simple behaviors here can be enhanced with decision trees.
         all_responses = {} 
 
         for peer in self.router:
             responses             = []
+            ep_responses          = []
             altruism              = []
             local_altruism        = 0.00
 
@@ -598,47 +598,14 @@ class PTPBucket(dict):
             # satisfactory transactions with.
             multiplier = 2.1 if len(self.router) < 40 else 1.1
             
-            # Screen members of set EP for inflation/deflation.
+            # Ask members of EP about the peer in question.
             for extent_peer in self.extent.values():
                 if extent_peer == peer: continue
                 response = self.get(extent_peer, peer)
-                if response and response['transactions']:
-                    
-                    # Check for peers in EP reporting high transaction count and
-                    # high trust with peers we don't trust, indicating inflated scores.
-                    if not peer.trust and peer.transactions > 5 * multiplier \
-                        and response['transactions'] >= peer.transactions * multiplier \
-                        and float("%.1f" % self.altruism(response)) >= 1.0:
-                        if self.verbose:
-                            log((peer, extent_peer, response))
-                        if extent_peer.long_id in self.extent:
-                            extent_peer.trust = 0
-                            [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
-                            log("Removing %s from EP for inflating trust ratings." % extent_peer)
-                            del self.extent[extent_peer.long_id]
+                if response:
+                    ep_responses.append(response)
 
-                    # Check for members of set EP reporting 100% unsatisfactory
-                    # transactions with the peer in question but not reporting the
-                    # peer as having trust == 0 when reporting altruism < 0.8.
-                    if self.altruism(response) <= 0.8 and response['trust'] > 0:
-                        if self.verbose:
-                            log((extent_peer, peer, response))
-                        if extent_peer.long_id in self:
-                            log("Removing %s from EP for deflating trust ratings." % \
-                                extent_peer)
-                            del self.extent[extent_peer.long_id]
-
-                    # Check for peers in EP reporting trust ratings greater or lower
-                    # than what they could be in relation to reported transaction counts.
-                    if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
-                    or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
-                    and response['trust'] and extent_peer.long_id in self.extent:
-                        extent_peer.trust = 0
-                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
-                        log("Removing %s from EP for impossible trust ratings." % extent_peer)
-                        del self.extent[extent_peer.long_id]
- 
-            # Ask members of set P about everyone in our routing table.
+            # Ask members of set P about the peer.
             for trusted_peer in self.values():
                 if trusted_peer == peer: continue
                 response = self.get(trusted_peer, peer)
@@ -650,21 +617,67 @@ class PTPBucket(dict):
                     else:
                         all_responses[trusted_peer].append((peer, response))
 
-            # Check for peers in P reporting high transaction count and
-            # altruism > 1 - delta with peers we don't trust, which indicates
-            # trusted peers giving inflated trust ratings.
+            for response in ep_responses:
+                if response and response['transactions']:
+                    
+                    # Check for peers in EP reporting trust ratings greater or lower
+                    # than what they could be in relation to reported transaction counts.
+                    if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
+                    or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
+                    and response['trust'] and extent_peer.long_id in self.extent:
+                        extent_peer.trust = 0
+                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
+                        log("Removing %s from EP for impossible trust ratings." % extent_peer)
+                        del self.extent[extent_peer.long_id]
+                        continue
+
+                    # Check for members of set EP reporting 100% unsatisfactory
+                    # transactions with the peer in question but not reporting the
+                    # peer as having trust == 0 when reporting altruism < 0.8.
+                    if self.altruism(response) <= 0.8 and response['trust'] > 0:
+                        if self.verbose:
+                            log((extent_peer, peer, response))
+                        if extent_peer.long_id in self:
+                            log("Removing %s from EP for deflating trust ratings." % \
+                                extent_peer)
+                            del self.extent[extent_peer.long_id]
+                            continue
+
+                    # Check for peers in EP reporting high transaction count and
+                    # high trust with peers we don't trust, indicating inflated scores.
+                    if not peer.trust and peer.transactions > 5 * multiplier \
+                        and response['transactions'] >= peer.transactions * multiplier \
+                        and float("%.1f" % self.altruism(response)) >= 1.0:
+                        # Check for at least two members of set P to cross-reference with
+                        if len(responses) < 3: break
+                        c = 0
+                        for _, resp in responses:
+                            if self.altruism(resp) > 0.95: c += 1
+                        # Vet the next response from the next member of EP if
+                        # less than 90% of P find the current peer untrustworthy.
+                        if c < 0.9 * (len(responses) - 1):
+                            continue
+                        if self.verbose:
+                            log((peer, extent_peer, response))
+                        if extent_peer.long_id in self.extent:
+                            extent_peer.trust = 0
+                            [setattr(_, "trust", 0) for _ in self.router.peers if _ == extent_peer]
+                            log("Removing %s from EP for inflating trust ratings." % extent_peer)
+                            del self.extent[extent_peer.long_id]
+ 
+
+            # Check for peers in P reporting trust ratings greater or lower
+            # than what they could be in relation to reported transaction counts.
             for trusted_peer, response in responses:
-                if not peer.trust and peer.transactions > 5 * multiplier \
-                    and response['transactions'] >= peer.transactions * multiplier \
-                    and float("%.1f" % self.altruism(response)) >= 1.0:
-                    if self.verbose:
-                        log((peer, trusted_peer, response))
-                    if trusted_peer.long_id in self:
-                        trusted_peer.trust = 0
-                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
-                        log("Removing %s from P for inflating trust ratings." % \
-                            trusted_peer)
-                        del self[trusted_peer.long_id]
+                if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
+                or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
+                and response['trust'] and trusted_peer.long_id in self:
+                    trusted_peer.trust = 0
+                    [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
+                    log("Removing %s from P for impossible trust ratings." % trusted_peer)
+                    del self[trusted_peer.long_id]
+                    responses.remove((trusted_peer, response))
+                    continue
 
                 # Check for members of set P reporting 100% unsatisfactory
                 # transactions with the peer in question but not reporting the
@@ -678,17 +691,34 @@ class PTPBucket(dict):
                         log("Removing %s from P for deflating trust ratings." % \
                             trusted_peer)
                         del self[trusted_peer.long_id]
+                        responses.remove((trusted_peer, response))
+                        continue
 
-                # Check for peers in P reporting trust ratings greater or lower
-                # than what they could be in relation to reported transaction counts.
-                if (response['trust'] > 0.5 + (response['transactions'] * self.router.node.epsilon)) \
-                or (response['trust'] < 0.5 - (response['transactions'] * self.router.node.epsilon)) \
-                and response['trust'] and trusted_peer.long_id in self:
-                    trusted_peer.trust = 0
-                    [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
-                    log("Removing %s from P for impossible trust ratings." % trusted_peer)
-                    del self[trusted_peer.long_id]
-            
+                # Check for peers in P reporting high transaction count and
+                # altruism > 1 - delta with peers we don't trust, which indicates
+                # trusted peers giving inflated trust ratings.
+                if not peer.trust and peer.transactions > 5 * multiplier \
+                    and response['transactions'] >= peer.transactions * multiplier \
+                    and float("%.1f" % self.altruism(response)) >= 1.0:
+                    # Check for at least two members of set P to cross-reference with
+                    if len(responses) < 3: break
+                    c = 0
+                    for _, resp in responses:
+                        if self.altruism(resp) > 0.95: c += 1
+                    # Vet the next response from the next member of EP if
+                    # less than 90% of P find the current peer untrustworthy.
+                    if c < 0.9 * (len(responses) - 1):
+                        continue
+                    if self.verbose:
+                        log((peer, trusted_peer, response))
+                    if trusted_peer.long_id in self:
+                        trusted_peer.trust = 0
+                        [setattr(_, "trust", 0) for _ in self.router.peers if _ == trusted_peer]
+                        log("Removing %s from P for inflating trust ratings." % \
+                            trusted_peer)
+                        del self[trusted_peer.long_id]
+                        responses.remove((trusted_peer, response))
+
             if not peer.trust: continue
 
             local_altruism = float("%.1f" % self.altruism(peer))
