@@ -30,10 +30,6 @@ def scenario_one(options):
     
     utils.introduce(bad_routers)
     
-    # For the LULZ:
-#    [_.tbucket.append(random.sample(_.peers, min(options.pre_trusted, len(_.peers)))) \
-#     for _ in bad_routers]
-    
     utils.introduce(good_routers, bad_routers)
 
     # Note that this is based on a definite transaction count but that it's
@@ -56,8 +52,6 @@ def scenario_one(options):
                 utils.log("%i %s %s is sensing." % (i+1, router, router.node))
                 router.tbucket.calculate_trust()
 
-#    good_routers[0].tbucket.calculate_trust()
-
     # The return value of a scenario is used to populate "locals" in the event
     # that you choose to use the --repl flag to spawn an interactive interpreter.
     return {"routers": routers}
@@ -71,8 +65,10 @@ def scenario_two(options):
     A mix of new peers are introduced every 1/5th of the iteration count.
     Good peers have a 1 in 250 chance of receiving negative feedback from other
     good peers.
+
+    This scenario has the highest likelihood of exhibiting consensus events.
     """
-    routers      = utils.generate_routers(options, minimum=4)
+    routers      = utils.generate_routers(options, minimum=2)
     good_routers = routers[:len(routers) / 2]
     bad_routers  = routers[len(routers) / 2:]
 
@@ -121,14 +117,12 @@ def scenario_two(options):
             
             routers.extend(new_good_routers)
             routers.extend(new_bad_routers)
-            
-            [setattr(r, "routers", routers) for r in new_good_routers]
-            [setattr(r, "routers", routers) for r in new_bad_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
-            utils.introduce(new_good_routers, random.sample(good_routers,
-                random.choice(range(2, len(good_routers)))))
-            utils.introduce(new_bad_routers,  random.sample(good_routers,
-                random.choice(range(2, len(good_routers)))))
+            utils.introduce(new_good_routers, random.sample(routers,
+                random.choice(range(2, len(routers)))))
+            utils.introduce(new_bad_routers,  random.sample(routers,
+                random.choice(range(2, len(routers)))))
             
             for r in new_good_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -203,7 +197,8 @@ def scenario_three(options):
 
         # Introduce a mix of new peers every 1/5th of the iteration count
         if _ > 5 and not _ % (options.transactions / 5):
-            new_good_routers = utils.generate_routers(options, maximum=random.randint(1, 3))
+            new_good_routers = utils.generate_routers(options,
+                                                   maximum=random.randint(1, 3))
             new_bad_routers  = utils.generate_routers(options,
                                                    maximum=random.randint(1, 3),
                                                    attrs={'probably_malicious': True})
@@ -211,11 +206,12 @@ def scenario_three(options):
             routers.extend(new_good_routers)
             routers.extend(new_bad_routers)
             
-            [setattr(r, "routers", routers) for r in new_good_routers]
-            [setattr(r, "routers", routers) for r in new_bad_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
-            utils.introduce(new_good_routers, random.sample(good_routers, random.choice(range(2, 6))))
-            utils.introduce(new_bad_routers,  random.sample(good_routers, random.choice(range(2, 6))))
+            utils.introduce(new_good_routers, random.sample(good_routers,
+                random.choice(range(2, 6))))
+            utils.introduce(new_bad_routers,  random.sample(good_routers,
+                random.choice(range(2, 6))))
             
             for r in new_good_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -229,8 +225,11 @@ def scenario_four(options):
     There are no malicious peers.
     A mix of new peers are introduced every 1/5th of the iteration count.
     Peers have a 1 in 250 chance of receiving negative feedback from eachother.
+
+    This is to mimic a real-life system with growth from a small number of
+    initial users.
     """
-    routers = utils.generate_routers(options, minimum=4)
+    routers = utils.generate_routers(options, minimum=2)
 
     utils.introduce(routers)
     
@@ -266,10 +265,10 @@ def scenario_four(options):
             new_routers = utils.generate_routers(options, maximum=random.randint(1, 3))
             
             routers.extend(new_routers)
-            
-            [setattr(r, "routers", routers) for r in new_routers]
+            [setattr(r, "routers", routers) for r in routers]
 
-            utils.introduce(new_routers, random.sample(routers, random.choice(range(2, len(routers)))))
+            utils.introduce(new_routers, random.sample(routers,
+                random.choice(range(2, len(routers)))))
             
             for r in new_routers:
                 utils.log("Introduced %s %s into the system." % (r, r.node))
@@ -286,23 +285,26 @@ def threat_model_a(options):
     
     [r.routers.append(good_peer) for r in routers]
     good_peer.routers = routers
-    utils.introduce(good_peer, random.sample(routers, options.nodes / 2))
+    
+    utils.introduce(good_peer, routers)
 
+    routers.insert(0, good_peer)
+    
     utils.log("Emulating %s iterations of transactions with all peers." % \
         "{:,}".format(options.transactions))
     for _ in range(options.transactions):
-        for peer in good_peer.peers:
-            if not random.randint(0, 1): continue
-            good_peer.transact_with(peer)
-    
         for router in routers:
             for peer in router.peers:
                 if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
-    good_peer.tbucket.calculate_trust()
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
-    routers.insert(0, good_peer)
     return {"routers": routers}
 
 def threat_model_b(options):
@@ -322,7 +324,7 @@ def threat_model_b(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = data['trust'] * 2
+                    data['trust'] = peer.transactions * self.node.epsilon
                 response.append(data)
             return response
     
@@ -342,7 +344,6 @@ def threat_model_b(options):
     utils.introduce(good_peers)
     
     # Set good peers up with some pre-trusted friends
-    # NOTE: Routing tables don't fare well without trusted peers.
     [_.tbucket.append(_.peers[:options.pre_trusted]) for _ in good_peers]
 
     divisor = 1 if options.nodes == 1 else 2
@@ -351,18 +352,17 @@ def threat_model_b(options):
     utils.log("Emulating %s iterations of transactions with all peers." % \
         "{:,}".format(options.transactions))
     for _ in range(options.transactions):
-        for router in good_peers:
-            for peer in router.peers:
-                if not random.randint(0, 1): continue
-                router.transact_with(peer)
- 
-        for router in routers:
+        for router in all_routers:
             for peer in router.peers:
                 if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
-    good_peers[0].tbucket.calculate_trust()
-    #[router.tbucket.calculate_trust() for router in good_peers]
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
     return {"routers": all_routers}
 
@@ -411,17 +411,17 @@ def threat_model_c(options):
     utils.log("Emulating %s transactions with each peer." % \
         "{:,}".format(transactions))
     for _ in range(transactions):
-        for router in good_peers:
-            for peer in router.peers:
-                if not random.randint(0, 1): continue
-                router.transact_with(peer)
-        
-        for routers in bad_peers:
+        for router in routers:
             for peer in router.peers:
                 if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
-    good_peers[0].tbucket.calculate_trust()
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
     for router in bad_peers:
         utils.log("%s %i negative transactions, %i positive." % \
@@ -443,7 +443,8 @@ def threat_model_d(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = data['trust'] * 2
+                    data['trust'] = 0.5 + (peer.transactions * \
+                        self.node.epsilon)
                 response.append(data)
             return response
 
@@ -458,12 +459,15 @@ def threat_model_d(options):
             for peer in self.peers:
                 data = peer.jsonify()
                 if any(filter(lambda r: r.node == peer, self.collective)):
-                    data['trust'] = max(data['trust'], 0.5) * 2
+                    data['trust'] = max(0.5 + (peer.transactions * \
+                        self.node.epsilon), 0.5)
                 response.append(data)
             return response
     
-    bad_peers        = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
-    accomplice_peers = utils.generate_routers(options, minimum=10, router_class=AccompliceRouter)
+    bad_peers        = utils.generate_routers(options, minimum=10,
+                                              router_class=EvilRouter)
+    accomplice_peers = utils.generate_routers(options, minimum=10,
+                                              router_class=AccompliceRouter)
     good_peers       = utils.generate_routers(options, minimum=20)
 
     routers = []
@@ -476,12 +480,10 @@ def threat_model_d(options):
 
     [setattr(r, "routers", routers) for r in routers]
 
-    utils.introduce(good_peers)
-
-    # Set good peers up with some pre-trusted friends
-    [_.tbucket.append(_.peers[:options.pre_trusted]) for _ in good_peers]
-
     utils.introduce(routers)
+    
+    # Set good peers up with some pre-trusted friends
+    [_.tbucket.append(random.sample(_.peers, options.pre_trusted)) for _ in good_peers]
 
     utils.log("Emulating %s iterations of transactions with all peers." % \
         "{:,}".format(options.transactions))
@@ -498,8 +500,12 @@ def threat_model_d(options):
                 if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
-    good_peers[0].tbucket.calculate_trust()
-    #[router.tbucket.calculate_trust() for router in good_peers]
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
     return {"routers": routers}
 
@@ -544,8 +550,19 @@ def threat_model_e(options):
                     new_router.probably_malicious = True
                     utils.introduce(router, new_router)
 
-    good_peers[0].tbucket.calculate_trust()
-    #[router.tbucket.calculate_trust() for router in good_peers]
+        # Accomplice routers work by doubling the trust trust rating of
+        # peers in the collective, which necessitates some good transactions
+        for router in routers:
+            for peer in router.peers:
+                if not random.randint(0, 1): continue
+                router.transact_with(peer)
+        
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
     return {"routers": routers}
 
@@ -565,7 +582,8 @@ def threat_model_f(options):
             self.counter += 1
             return not self.counter % 100
 
-    bad_peers  = utils.generate_routers(options, minimum=10, router_class=EvilRouter)
+    bad_peers  = utils.generate_routers(options, minimum=10,
+                                        router_class=EvilRouter)
     good_peers = utils.generate_routers(options, minimum=5)
     routers = []
     routers.extend(bad_peers)
@@ -589,16 +607,19 @@ def threat_model_f(options):
     utils.log("Emulating %s transactions with each peer." % \
         "{:,}".format(transactions))
     for _ in range(transactions):
-        for router in good_peers:
-            for peer in router.peers:
-                if not random.randint(0, 1): continue
-                router.transact_with(peer)
-        for routers in bad_peers:
+        # Accomplice routers work by doubling the trust trust rating of
+        # peers in the collective, which requires some good transactions
+        for router in routers:
             for peer in router.peers:
                 if not random.randint(0, 1): continue
                 router.transact_with(peer)
 
-    good_peers[0].tbucket.calculate_trust()
+        # Calculate trust every 5 rounds here. Normally the periodicity would be
+        # a function of network size.
+        if _ > 1 and not (_+1) % 5:
+            for i, router in enumerate(routers):
+                utils.log("%i %s %s is sensing." % (i+1, router, router.node))
+                router.tbucket.calculate_trust()
 
     return {"routers": routers}
 
