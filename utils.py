@@ -888,7 +888,7 @@ def introduce(routers, secondary=[]):
     if not isinstance(secondary, list):
         secondary = [secondary]
     
-    if not any(secondary):
+    if not secondary:
         log("Introducing %s routing tables to one another." % "{:,}".format(len(routers)))
         for router in routers:
             router.peers.extend([r.node.copy() for r in routers if r != router])
