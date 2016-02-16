@@ -527,15 +527,6 @@ class PTPBucket(dict):
                     if _['node'] == about_node.threeple:
                         return _
 
-    def med(self, ls):
-        if not numpy:
-            med = median(ls)
-        else:
-            med =  numpy.median(numpy.array(ls))
-        if self.verbose:
-            log("med:    %s %f" % (ls, med))
-        return med
-
     def median(self, l):
         if numpy:
             [l.remove(_) for _ in l if _ > 1 or _ < 0 \
@@ -989,7 +980,7 @@ def sort_nodes_by_trust(nodes):
         greater = sort_nodes_by_trust([x for x in nodes[1:] if x.trust >= pivot.trust])
         return greater + [pivot] + lesser
 
-def mean(self, ls):
+def mean(ls):
     if not isinstance(ls, (list, tuple)):
         return
     if numpy:
