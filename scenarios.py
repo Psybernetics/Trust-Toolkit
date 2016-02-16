@@ -68,7 +68,7 @@ def scenario_two(options):
 
     This scenario has the highest likelihood of exhibiting consensus events.
     """
-    routers      = utils.generate_routers(options, minimum=4)
+    routers      = utils.generate_routers(options, minimum=2)
     good_routers = routers[:len(routers) / 2]
     bad_routers  = routers[len(routers) / 2:]
 
@@ -229,7 +229,7 @@ def scenario_four(options):
     This is to mimic a real-life system with growth from a small number of
     initial users.
     """
-    routers = utils.generate_routers(options, minimum=4)
+    routers = utils.generate_routers(options, minimum=2)
 
     utils.introduce(routers)
     
