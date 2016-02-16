@@ -988,10 +988,7 @@ def mean(ls):
     else:
         [ls.remove(_) for _ in ls if _ == None]
     if not ls: return 0.00
-    mean = sum(ls) / float(len(ls))
-    if self.verbose:
-        log("mean:   %s %f" % (ls, mean))
-    return mean
+    return sum(ls) / float(len(ls))
 
 def median(ls):
     if numpy:
