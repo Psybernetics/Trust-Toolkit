@@ -526,6 +526,26 @@ class PTPBucket(dict):
                 for _ in router.render_peers():
                     if _['node'] == about_node.threeple:
                         return _
+    def med(self, ls):
+        if numpy:
+            return numpy.median(numpy.array(ls))
+        ls = sorted(ls)
+        if len(ls) < 1:
+            return None
+        if len(ls) %2 == 1:
+            return ls[((len(ls)+1)/2)-1]
+        else:
+            return float(sum(ls[(len(ls)/2)-1:(len(ls)/2)+1]))/2.0
+
+    def mean(self, ls):
+        if not isinstance(ls, (list, tuple)):
+            return
+        if numpy:
+            [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
+        else:
+            [ls.remove(_) for _ in ls if _ == None]
+        if not ls: return 0.00
+        return sum(ls) / float(len(ls))
 
     def median(self, l):
         if numpy:
@@ -535,11 +555,11 @@ class PTPBucket(dict):
             [l.remove(_) for _ in l if _ > 1 or _ < 0 \
              or not isinstance(_, (int, float))]
         if not len(l): return 0.00
-        a = mean(l)
-        m = median(l)
-        me = mean([a, m])
+        a  = self.mean(l)
+        m  = self.med(l)
+        me = self.mean([a, m])
         if self.verbose:
-            log("me:     [%f, %f] %f" % (a, m, me))
+            log("a,m,me: [%f, %f] %f" % (a, m, me))
         median = min(max(me, 0), 1)
         if self.verbose:
             log("median: %s %f" % (l, median))
@@ -980,26 +1000,6 @@ def sort_nodes_by_trust(nodes):
         greater = sort_nodes_by_trust([x for x in nodes[1:] if x.trust >= pivot.trust])
         return greater + [pivot] + lesser
 
-def mean(ls):
-    if not isinstance(ls, (list, tuple)):
-        return
-    if numpy:
-        [ls.remove(_) for _ in ls if _ == None or _ is numpy.nan]
-    else:
-        [ls.remove(_) for _ in ls if _ == None]
-    if not ls: return 0.00
-    return sum(ls) / float(len(ls))
-
-def median(ls):
-    if numpy:
-        return numpy.median(numpy.array(ls))
-    ls = sorted(ls)
-    if len(ls) < 1:
-        return None
-    if len(ls) %2 == 1:
-        return ls[((len(ls)+1)/2)-1]
-    else:
-        return float(sum(ls[(len(ls)/2)-1:(len(ls)/2)+1]))/2.0
 class colour:
     purple = '\033[95m' 
     blue = '\033[94m'
