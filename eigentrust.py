@@ -71,7 +71,8 @@ if __name__ == "__main__":
 
     if "routers" in returned_data:
         table_data = [{"Routing Table": r,
-            "Consensus Events": str(r.tbucket.consensus_events) + "               "} \
+            "Consensus Events": str(r.tbucket.consensus_events) +\
+            "               "} \
             for r in returned_data["routers"]]
         utils.table(table_data)
 
