@@ -1,10 +1,19 @@
 # _*_ coding: utf-8 _*_
 """
-The system depends on good peers. EigenTrust++ works optimally when it has
-pre-trusted peers to defer to.
+The included algorithms work optimally when they have pre-trusted peers to
+defer to.
 
 If your test case does something like render all peers unlikeable you may want
 to set your good peers up with some pre-trusted peers.
+
+Scenario two is the most useful for seeing the kind of conditions that cause
+peers to acheive consensus about the maliciousness of their peers.
+
+This can be produced with the following:
+./eigentrust.py -v -n20 -p2 -t10000 -s two > `date "+%d-%m-%Y-%H%M%S%N"`.log
+
+Real-world networks are unlikely to begin with 20 users so it's advised to test
+new algorithms with low node counts and high iteration counts.
 """
 import utils
 import random

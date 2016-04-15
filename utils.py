@@ -23,8 +23,8 @@ class Node(object):
         if isinstance(node_id, long):
             try:    node_id = binascii.unhexlify('%x' % node_id)
             except: return Node(node_id, ip, port, router)
-        self.id           = "Test Node" # Uncomment the following if you need
-                                        # realistic node IDs.
+        self.id           = "Test Node"
+        # Uncomment the following if you need realistic node IDs.
 #        self.id           = node_id or hashlib.sha1(
 #                                hex(id(self)) +
 #                                datetime.datetime.now().strftime("%f")
@@ -486,7 +486,7 @@ class PTPBucket(dict):
         # pre-emptively dismissed for service. 0.5% by default. This means that
         # we'll tolerate one unsatisfactory download out of every 200 per
         # threat model F.
-        self.delta   = 0.005
+        self.delta = 0.005
         
         # Percentage of network peers we need to trust before we start
         # letting them cut us off from peers they report to be malicious.
@@ -497,7 +497,11 @@ class PTPBucket(dict):
         
         # Whether we're logging stats.
         self.verbose = None
-        
+
+        # Given that this is the test toolkit we keep a record of consensus
+        # events for review at the end of simulation run.
+        self.consensus_events = 0
+
         dict.__init__(self, *args, **kwargs)
 
     @property
@@ -566,15 +570,12 @@ class PTPBucket(dict):
         return median
 
     def altruism(self, i):
-        # print i, 
         if isinstance(i, Node):
             i = {"trust": i.trust, "transactions": i.transactions}
         divisor = (i['transactions'] * self.router.node.epsilon)
-        # print i, divisor
         a = i['trust'] - self.router.node.trust
         if not divisor and not a: return 1.00
         if not divisor: return 0.00
-        # print a
         return a / divisor
 
     def calculate_trust(self):
@@ -786,6 +787,7 @@ class PTPBucket(dict):
                 if (median_reported_altruism + self.delta) < 1.0:
                     log("Consensus from our trusted peers is that %s is malicious." % peer)
                     peer.trust = 0
+                    self.consensus_events += 1
                     continue
             
             # Don't adjust a peers' trust rating to more closely reflect the consensus
