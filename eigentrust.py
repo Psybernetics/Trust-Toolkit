@@ -69,9 +69,13 @@ if __name__ == "__main__":
             print("Error: Unknown scenario.")
             raise SystemExit
 
+    if "routers" in returned_data:
+        table_data = [{"Routing Table": r,
+            "Consensus Events": str(r.tbucket.consensus_events) + "               "} \
+            for r in returned_data["routers"]]
+        utils.table(table_data)
+
     returned_data.update({"utils": utils})
 
     if options.repl:
         utils.invoke_ptpython(returned_data)
-
-    
