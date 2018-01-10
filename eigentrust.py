@@ -8,6 +8,11 @@ The idea is to pre-emptively mitigate what damage could be wrought by a well
 resourced actor who fills popular overlay networks with peers who create
 references to themselves for regularly requested resources while inflating the
 malicious collectives' overall trust rating in the eyes of legitimate users.
+
+NOTE: This model cannot defend against peers who earn trust and then defect.
+      This model also does not rate redistributed hypermedia resources for
+      trustworthiness / maliciousness.
+
 """
 import sys
 import utils
